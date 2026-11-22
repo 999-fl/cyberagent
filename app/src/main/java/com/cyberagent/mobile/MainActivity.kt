@@ -8,9 +8,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -62,7 +62,7 @@ fun CyberAgentApp() {
                     item {
                         Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Default.Security, null, tint = MaterialTheme.colorScheme.primary)
+                                Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.primary)
                                 Text("Your security workspace", style = MaterialTheme.typography.headlineSmall)
                                 Text("Lightweight reconnaissance and evidence collection for systems you are authorised to assess.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -79,13 +79,13 @@ fun CyberAgentApp() {
                     item {
                         Text("QUICK TOOLS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            ToolCard("DNS", "Lookup", Icons.Default.NetworkCheck, Modifier.weight(1f), !busy && target.isNotBlank()) {
+                            ToolCard("DNS", "Lookup", Icons.Default.Info, Modifier.weight(1f), !busy && target.isNotBlank()) {
                                 busy = true; scope.launch { try { append(NetTools.dns(target)) } catch (e: Exception) { append("DNS error: ${e.message}") } finally { busy = false } }
                             }
                             ToolCard("TCP", "Scan", Icons.Default.Security, Modifier.weight(1f), !busy && target.isNotBlank()) {
                                 busy = true; scope.launch { try { append(NetTools.scan(target)) } catch (e: Exception) { append("Scan error: ${e.message}") } finally { busy = false } }
                             }
-                            ToolCard("HTTP", "Inspect", Icons.Default.Terminal, Modifier.weight(1f), !busy && target.isNotBlank()) {
+                            ToolCard("HTTP", "Inspect", Icons.Default.Search, Modifier.weight(1f), !busy && target.isNotBlank()) {
                                 busy = true; scope.launch { try { append(NetTools.http(target)) } catch (e: Exception) { append("HTTP error: ${e.message}") } finally { busy = false } }
                             }
                         }
