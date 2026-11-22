@@ -27,6 +27,6 @@ object ApkInspector {
     risky.sorted().forEach{appendLine(" ! "+it)}
     appendLine("\nThis is a permissions inventory, not a malware verdict.")
    }
-  }catch(e:Exception){ "APK inspection error: "+e.message }finally{file.delete()}
+  }catch(e:Exception){ return "APK inspection error: "+e.message }finally{file.delete()}
  }
 }
