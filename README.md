@@ -26,6 +26,6 @@ GitHub Actions workflow builds a debug APK artifact on push or manual run.
 - Bounded AI function-call loop (up to four tool rounds) using OpenAI-compatible chat completions.
 - Agent tools are DNS lookup, modest TCP connect scan of common ports, and HTTP(S) GET inspection.
 - Agent tool arguments are constrained to the entered target hostname; requests remain non-destructive and do not submit credentials or exploit payloads.
-- Web inspector reports status, headers, redirect chain and TLS cipher (where exposed); redirects are limited to four hops.
+- Web inspector reports status, headers, redirect chain and TLS cipher (where exposed); redirects are limited to four hops and blocked if they leave the scoped hostname.
 
 Build remains via the GitHub Actions workflow; this environment's build status must be checked independently. The loop currently does not persist API keys or logs across app restarts.
