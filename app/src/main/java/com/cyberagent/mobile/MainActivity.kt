@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
 fun CyberAgentApp() {
  val scope = rememberCoroutineScope()
  val context = LocalContext.current
- var apiKey by remember { mutableStateOf("") }
+ var apiKey by remember { mutableStateOf(KeyVault.load(context)) }
  var endpoint by remember { mutableStateOf("https://openrouter.ai/api/v1") }
  var model by remember { mutableStateOf("deepseek/deepseek-chat") }
  var target by remember { mutableStateOf("") }
@@ -40,7 +40,7 @@ fun CyberAgentApp() {
     Text("Android security assistant • no ads • no root", style=MaterialTheme.typography.bodySmall)
     OutlinedTextField(endpoint, { endpoint=it }, label={Text("API base URL")}, modifier=Modifier.fillMaxWidth())
     OutlinedTextField(model, {model=it}, label={Text("Model ID")}, modifier=Modifier.fillMaxWidth())
-    OutlinedTextField(apiKey, {apiKey=it}, label={Text("API key")}, visualTransformation=PasswordVisualTransformation(), modifier=Modifier.fillMaxWidth())
+    OutlinedTextField(apiKey, {apiKey=it}, label={Text("API key (encrypted on device)")}, visualTransformation=PasswordVisualTransformation(), modifier=Modifier.fillMaxWidth())\n    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {\n     Button(onClick={ try { KeyVault.save(context,apiKey); append("API key saved encrypted with Android Keystore.") } catch(e:Exception) { append("Key save failed: ${e.message}") } }) { Text("Save key") }\n     TextButton(onClick={apiKey="";KeyVault.clear(context);append("Stored API key cleared.")}) { Text("Forget key") }\n    }
     OutlinedTextField(target, {target=it}, label={Text("Target (host / URL)")}, modifier=Modifier.fillMaxWidth())
     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
      Button(enabled=!busy && target.isNotBlank(), onClick={busy=true; scope.launch { try { append(NetTools.scan(target)) } catch(e:Exception) { append("Scan error: ${e.message}") } finally { busy=false } }}) { Text("TCP scan") }
