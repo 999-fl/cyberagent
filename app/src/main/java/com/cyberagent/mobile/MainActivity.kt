@@ -64,7 +64,7 @@ fun CyberAgentApp() {
                     item {
                         Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Default.Security, null, tint = MaterialTheme.colorScheme.primary)
+                                Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.primary)
                                 Text("Assessment workspace", style = MaterialTheme.typography.headlineSmall)
                                 Text("Lightweight reconnaissance and evidence collection for systems you are authorised to assess.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -108,7 +108,7 @@ fun CyberAgentApp() {
                     item {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) { Text("EVIDENCE", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Text("Run history", style = MaterialTheme.typography.titleMedium) }
-                            TextButton(onClick = { try { val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager; cm.setPrimaryClip(android.content.ClipData.newPlainText("CyberAgent log", log)); append("Log copied to clipboard.") } catch (_: Exception) { append("Clipboard copy failed.") } }) { Icon(Icons.Default.ContentCopy, null); Text("Copy") }\n                            TextButton(enabled = !busy, onClick = { log = "Log cleared." }) { Text("Clear") }
+                            TextButton(onClick = { try { val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager; cm.setPrimaryClip(android.content.ClipData.newPlainText("CyberAgent log", log)); append("Log copied to clipboard.") } catch (_: Exception) { append("Clipboard copy failed.") } }) { Icon(Icons.Default.Info, null); Text("Copy") }\n                            TextButton(enabled = !busy, onClick = { log = "Log cleared." }) { Text("Clear") }
                             TextButton(onClick = {
                                 val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, "CyberAgent evidence"); putExtra(Intent.EXTRA_TEXT, "CyberAgent evidence log\nTarget: $target\n\n$log") }
                                 context.startActivity(Intent.createChooser(send, "Export evidence"))
