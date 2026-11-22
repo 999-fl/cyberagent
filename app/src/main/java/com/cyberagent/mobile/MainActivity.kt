@@ -5,6 +5,8 @@ import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,6 +43,7 @@ fun CyberAgentApp() {
     var log by remember { mutableStateOf("Ready. Configure your provider in Settings to enable AI analysis.") }
     var busy by remember { mutableStateOf(false) }
     fun append(message: String) { log = (log + "\n\n" + message).takeLast(24000) }
+    val apkPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) { busy = true; scope.launch { try { append(ApkInspector.inspect(context, uri)) } finally { busy = false } } } }
 
     MaterialTheme(colorScheme = darkColorScheme(
         primary = androidx.compose.ui.graphics.Color(0xFF76E5B1),
@@ -77,6 +80,9 @@ fun CyberAgentApp() {
                     item {
                         Text("TARGET", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         OutlinedTextField(target, { target = it }, placeholder = { Text("Hostname or URL") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+                    }
+                    item {
+                        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("APK REVIEW", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Text("Inspect an Android APK permission inventory and metadata locally.", color = MaterialTheme.colorScheme.onSurfaceVariant); Button(onClick = { apkPicker.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream")) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Select APK to inspect") } } }
                     }
                     item {
                         Text("QUICK RECON", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
