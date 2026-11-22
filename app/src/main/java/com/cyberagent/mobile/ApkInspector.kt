@@ -13,7 +13,7 @@ object ApkInspector {
    context.contentResolver.openInputStream(uri)?.use { input -> file.outputStream().use { output -> input.copyTo(output) } } ?: return "Could not read APK."
    val info=if(Build.VERSION.SDK_INT>=33) context.packageManager.getPackageArchiveInfo(file.absolutePath,PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong())) else context.packageManager.getPackageArchiveInfo(file.absolutePath,PackageManager.GET_PERMISSIONS)
    if(info==null)return "APK metadata could not be parsed."
-   val app=info.applicationInfo
+   val app=info.applicationInfo ?: return "APK has no application metadata."
    app.sourceDir=file.absolutePath; app.publicSourceDir=file.absolutePath
    val label=try{context.packageManager.getApplicationLabel(app).toString()}catch(_:Exception){ "(unknown)"}
    val permissions=info.requestedPermissions ?: emptyArray()
