@@ -1,6 +1,7 @@
 package com.cyberagent.mobile
 
-import android.content.Intent\nimport android.content.Context
+import android.content.Intent
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,8 +11,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -33,7 +32,8 @@ fun CyberAgentApp() {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var apiKey by remember { mutableStateOf(KeyVault.load(context)) }
-    val prefs = context.getSharedPreferences("cyberagent_config", Context.MODE_PRIVATE)\n    var endpoint by remember { mutableStateOf(prefs.getString("endpoint", "https://openrouter.ai/api/v1") ?: "") }
+    val prefs = context.getSharedPreferences("cyberagent_config", Context.MODE_PRIVATE)
+    var endpoint by remember { mutableStateOf(prefs.getString("endpoint", "https://openrouter.ai/api/v1") ?: "") }
     var model by remember { mutableStateOf(prefs.getString("model", "deepseek/deepseek-chat") ?: "") }
     var settingsOpen by remember { mutableStateOf(false) }
     var target by remember { mutableStateOf("") }
@@ -108,7 +108,8 @@ fun CyberAgentApp() {
                     item {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) { Text("EVIDENCE", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Text("Run history", style = MaterialTheme.typography.titleMedium) }
-                            TextButton(onClick = { try { val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager; cm.setPrimaryClip(android.content.ClipData.newPlainText("CyberAgent log", log)); append("Log copied to clipboard.") } catch (_: Exception) { append("Clipboard copy failed.") } }) { Icon(Icons.Default.Info, null); Text("Copy") }\n                            TextButton(enabled = !busy, onClick = { log = "Log cleared." }) { Text("Clear") }
+                            TextButton(onClick = { try { val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager; cm.setPrimaryClip(android.content.ClipData.newPlainText("CyberAgent log", log)); append("Log copied to clipboard.") } catch (_: Exception) { append("Clipboard copy failed.") } }) { Icon(Icons.Default.Info, null); Text("Copy") }
+                            TextButton(enabled = !busy, onClick = { log = "Log cleared." }) { Text("Clear") }
                             TextButton(onClick = {
                                 val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, "CyberAgent evidence"); putExtra(Intent.EXTRA_TEXT, "CyberAgent evidence log\nTarget: $target\n\n$log") }
                                 context.startActivity(Intent.createChooser(send, "Export evidence"))
