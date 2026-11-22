@@ -8,7 +8,7 @@ No ads. No root requirement. Android 8+.
 - DNS lookup, common-port TCP connect scan, HTTP(S) GET inspection.
 - HTTP status, response headers, redirect-chain and TLS cipher reporting (where available).
 - Activity/evidence log with in-app clearing and Android share-sheet export.
-- API keys are session-only (not persisted).
+- API keys can be saved encrypted using Android Keystore (AES-GCM) or cleared from the app.
 
 ## Scope and limitations
 - Agent tool arguments are restricted to the configured target hostname. HTTP(S) inspection manually follows up to four redirects and blocks destinations outside that hostname.
