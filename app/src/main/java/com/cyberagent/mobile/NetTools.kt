@@ -50,7 +50,7 @@ object NetTools {
       if(cleanHost(next)!=scope) return@withContext "Redirect blocked: destination outside defined scope ($scope).\nRedirect chain: ${visited.joinToString(" → ")} → $next"
       url=next; continue
     }
-    return@withContext "URL: $url\nStatus: $status\n$tls\nRedirect chain: ${visited.joinToString(" → ")}\nHeaders:\n$headers"
+    return@withContext "URL: $url\nStatus: $status\n$tls\nRedirect chain: ${visited.joinToString(" → ")}\nHeaders:\n$headers\n$checks"
    }
    "Redirect limit reached: ${visited.joinToString(" → ")}"
   } catch(e:Exception) { "Web inspection failed: ${e.message}" }
