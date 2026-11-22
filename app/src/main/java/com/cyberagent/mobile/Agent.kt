@@ -39,7 +39,7 @@ object Agent {
      val result=if(host(requested)!=scopeHost) "Blocked: tool argument is outside the defined target scope ($scopeHost)." else when(name) {
       "dns_lookup" -> NetTools.dns(scopeHost)
       "tcp_scan" -> NetTools.scan(scopeHost)
-      "web_inspect" -> NetTools.http(schemeUrl(target,requested))
+      "web_inspect" -> NetTools.http(schemeUrl(target,requested),scopeHost)
       else -> "Tool not registered."
      }
      messages.put(JSONObject().put("role","tool").put("tool_call_id",call.optString("id")).put("content",result))
