@@ -1,5 +1,6 @@
 package com.cyberagent.mobile
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -8,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -22,6 +24,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CyberAgentApp() {
  val scope = rememberCoroutineScope()
+ val context = LocalContext.current
  var apiKey by remember { mutableStateOf("") }
  var endpoint by remember { mutableStateOf("https://openrouter.ai/api/v1") }
  var model by remember { mutableStateOf("deepseek/deepseek-chat") }
@@ -45,10 +48,14 @@ fun CyberAgentApp() {
      Button(enabled=!busy && target.isNotBlank(), onClick={busy=true; scope.launch { try { append(NetTools.dns(target)) } catch(e:Exception) { append("DNS error: ${e.message}") } finally { busy=false } }}) { Text("DNS lookup") }
     }
     OutlinedTextField(prompt, {prompt=it}, label={Text("Ask agent / analyse results")}, modifier=Modifier.fillMaxWidth(), minLines=2)
-    Button(enabled=!busy && prompt.isNotBlank() && apiKey.isNotBlank(), onClick={busy=true; scope.launch { try { append(Agent.run(endpoint,model,apiKey,target,prompt,log)) } catch(e:Exception) { append("Agent error: ${e.message}") } finally { busy=false } }}) { Text(if(busy) "Working…" else "Run agent") }
+    Button(enabled=!busy && prompt.isNotBlank() && apiKey.isNotBlank() && target.isNotBlank(), onClick={busy=true; scope.launch { try { append(Agent.run(endpoint,model,apiKey,target,prompt,log)) } catch(e:Exception) { append("Agent error: ${e.message}") } finally { busy=false } }}) { Text(if(busy) "Working…" else "Run agent") }
     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
      Text("Activity / evidence", style=MaterialTheme.typography.titleMedium)
      TextButton(onClick={log="Log cleared."},enabled=!busy) {Text("Clear")}
+     TextButton(onClick={
+      val send=Intent(Intent.ACTION_SEND).apply { type="text/plain"; putExtra(Intent.EXTRA_SUBJECT,"CyberAgent evidence"); putExtra(Intent.EXTRA_TEXT,"CyberAgent evidence log\nTarget: $target\n\n$log") }
+      context.startActivity(Intent.createChooser(send,"Export evidence"))
+     }) {Text("Export")}
     }
     Box(Modifier.fillMaxSize()) { LazyColumn { item { Text(log) } } }
    }
