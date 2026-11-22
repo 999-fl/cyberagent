@@ -28,7 +28,7 @@ object Agent {
    var output=""
    repeat(MAX_ROUNDS) { round ->
     val payload=JSONObject().put("model",model).put("messages",messages).put("tools",toolsJson()).put("tool_choice","auto")
-    val request=Request.Builder().url(base.trimEnd('/')+"/chat/completions").addHeader("Authorization","Bearer $key").addHeader("Content-Type","application/json").post(payload.toString().toRequestBody("application/json".toMediaType())).build()
+    val request=Request.Builder().url(normalizeEndpoint(base)).addHeader("Authorization","Bearer $key").addHeader("Content-Type","application/json").post(payload.toString().toRequestBody("application/json".toMediaType())).build()
     val response=client.newCall(request).execute().use { r -> if(!r.isSuccessful) return@withContext "API error ${r.code}: ${r.body?.string()?.take(1200)}" else JSONObject(r.body!!.string()) }
     val msg=response.getJSONArray("choices").getJSONObject(0).getJSONObject("message"); messages.put(msg)
     output=msg.optString("content","")
@@ -49,6 +49,35 @@ object Agent {
   } catch(e:Exception) { "Agent error: ${e.message ?: e.javaClass.simpleName}" }
  }
  suspend fun ask(base:String,model:String,key:String,question:String,history:String):String=run(base,model,key,"",question,history)
+ suspend fun testProvider(base:String,model:String,key:String):String=withContext(Dispatchers.IO) {
+  if(key.isBlank()) return@withContext "Provider test failed: API key is blank. Save a key in Settings."
+  if(model.isBlank()) return@withContext "Provider test failed: model ID is blank."
+  val endpoint=normalizeEndpoint(base)
+  try {
+   val payload=JSONObject().put("model",model).put("messages",JSONArray().put(JSONObject().put("role","user").put("content","Reply with OK only."))).put("max_tokens",8)
+   val request=Request.Builder().url(endpoint).addHeader("Authorization","Bearer $key").addHeader("Content-Type","application/json").post(payload.toString().toRequestBody("application/json".toMediaType())).build()
+   client.newCall(request).execute().use { r ->
+    val body=r.body?.string().orEmpty()
+    if(r.isSuccessful) "Provider test successful (HTTP ${r.code}). Model responded."
+    else {
+     val detail=try { JSONObject(body).optJSONObject("error")?.optString("message") ?: body } catch(_:Exception){body}
+     when(r.code) {
+      401 -> "HTTP 401: Authentication rejected or missing. Check API key and provider endpoint. Details: ${detail.take(500)}"
+      403 -> "HTTP 403: Provider refused access (key permissions, credits, or account restriction). ${detail.take(500)}"
+      404 -> "HTTP 404: Endpoint or model not found. Ensure the base URL ends in /v1 (not /chat/completions) and model ID is correct. ${detail.take(500)}"
+      429 -> "HTTP 429: Rate limit or insufficient credits. ${detail.take(500)}"
+      else -> "Provider test failed (HTTP ${r.code}): ${detail.take(700)}"
+     }
+    }
+   }
+  } catch(e:Exception) { "Provider test error: ${e.message ?: e.javaClass.simpleName}" }
+ }
+ private fun normalizeEndpoint(base:String):String {
+  var value=base.trim().trimEnd('/')
+  value=value.removeSuffix("/chat/completions").removeSuffix("/completions").trimEnd('/')
+  if(value.isBlank()) return value
+  return if(value.endsWith("/v1")) value+"/chat/completions" else value+"/v1/chat/completions"
+ }
  private fun host(raw:String):String=try { URI(if(raw.contains("://"))raw else "https://$raw").host?.lowercase()?.removePrefix("www.") ?: raw.trim().lowercase().substringBefore("/") } catch(_:Exception){raw.trim().lowercase().substringBefore("/")}
  private fun schemeUrl(scope:String,request:String):String= if(request.contains("://"))request else if(scope.contains("://"))scope else "https://$request"
 }
