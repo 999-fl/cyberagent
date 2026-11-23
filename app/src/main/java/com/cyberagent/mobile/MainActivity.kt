@@ -127,7 +127,7 @@ fun CyberAgentApp() {
                             }) { Text("Export") }
                         }
                     }
-                    item { Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) { Text(log, Modifier.padding(14.dp), style = MaterialTheme.typography.bodySmall) } }
+                    item { Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) { Column(Modifier.padding(14.dp).heightIn(max = 300.dp).verticalScroll(rememberScrollState())) { Text(log, style = MaterialTheme.typography.bodySmall, lineHeight = MaterialTheme.typography.bodySmall.lineHeight) } } }
                     item { Text("CyberAgent • lightweight assessment tools", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
