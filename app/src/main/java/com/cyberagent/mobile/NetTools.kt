@@ -42,7 +42,7 @@ object NetTools {
  suspend fun http(raw:String,allowedHost:String):String = withContext<String>(Dispatchers.IO) {
   try {
    var url=if(raw.startsWith("http://")||raw.startsWith("https://")) raw else "https://$raw"; val visited=mutableListOf<String>()
-   while(true) {
+   for (hop in 0 until Int.MAX_VALUE) {
     if(url in visited) return@withContext "Redirect loop detected:\n"+visited.joinToString(" → ")
     visited.add(url)
     val c=URL(url).openConnection() as HttpURLConnection; c.connectTimeout=7000;c.readTimeout=7000;c.instanceFollowRedirects=false;c.requestMethod="GET";c.setRequestProperty("User-Agent","CyberAgent-Android/0.2")
