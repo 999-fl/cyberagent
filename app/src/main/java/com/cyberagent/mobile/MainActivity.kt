@@ -158,7 +158,27 @@ fun CyberAgentApp() {
                     OutlinedTextField(endpoint, { endpoint = it }, label = { Text("API base URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     OutlinedTextField(model, { model = it }, label = { Text("Model ID") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     OutlinedTextField(apiKey, { apiKey = it }, label = { Text("API key") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                    Button(onClick = { busy = true; providerTestResult = "Testing…"; scope.launch { try { providerTestResult = Agent.testProvider(endpoint, model, apiKey); append(providerTestResult) } catch (e: Exception) { providerTestResult = "Provider test failed: ${e.message}"; append(providerTestResult) } finally { busy = false } }, enabled = !busy && apiKey.isNotBlank() && endpoint.isNotBlank() && model.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Testing provider…" else "Test provider connection") }
+                    Button(
+                        onClick = {
+                            busy = true
+                            providerTestResult = "Testing…"
+                            scope.launch {
+                                try {
+                                    providerTestResult = Agent.testProvider(endpoint, model, apiKey)
+                                    append(providerTestResult)
+                                } catch (e: Exception) {
+                                    providerTestResult = "Provider test failed: ${e.message}"
+                                    append(providerTestResult)
+                                } finally {
+                                    busy = false
+                                }
+                            }
+                        },
+                        enabled = !busy && apiKey.isNotBlank() && endpoint.isNotBlank() && model.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (busy) "Testing provider…" else "Test provider connection")
+                    }
                     if (providerTestResult.isNotBlank()) Text(providerTestResult, style = MaterialTheme.typography.bodySmall)
                     Divider()
                     Text("AI BEHAVIOUR", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
