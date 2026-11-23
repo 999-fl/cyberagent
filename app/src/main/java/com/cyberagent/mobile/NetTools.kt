@@ -1,6 +1,8 @@
 package com.cyberagent.mobile
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import java.net.HttpURLConnection
@@ -9,11 +11,12 @@ import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
 object NetTools {
- private val ports = listOf(21,22,23,25,53,80,110,139,143,445,554,631,443,8080,8443,9000,3389)
+ private val ports = listOf(21 to "FTP",22 to "SSH",23 to "Telnet",25 to "SMTP",53 to "DNS",80 to "HTTP",110 to "POP3",139 to "NetBIOS",143 to "IMAP",445 to "SMB",554 to "RTSP",631 to "IPP",443 to "HTTPS",8080 to "HTTP-alt",8443 to "HTTPS-alt",9000 to "Common-alt",3389 to "RDP")
  suspend fun scan(host:String):String = withContext(Dispatchers.IO) {
-  val h=cleanHost(host); val out=StringBuilder("TCP connect scan of $h (common ports; authorized targets only):\n"); var found=false
-  ports.forEach { p -> try { Socket().use { s -> s.connect(java.net.InetSocketAddress(h,p),450); out.append("OPEN $p\n"); found=true } } catch (_:Exception){} }
-  if(!found) out.append("No common TCP ports reachable (or scan blocked).")
+  val h=cleanHost(host)
+  val results=ports.map { (port,service) -> async(Dispatchers.IO) { try { Socket().use { s -> s.connect(java.net.InetSocketAddress(h,port),650); "OPEN $port ($service)" } } catch (_:Exception){ null } } }.awaitAll().filterNotNull()
+  val out=StringBuilder("TCP connect scan of $h (17 common ports; authorized targets only):\n")
+  if(results.isEmpty()) out.append("No common TCP ports reachable (or scan blocked).") else results.forEach { out.append(it).append('\n') }
   out.toString()
  }
  suspend fun dns(host:String):String = withContext(Dispatchers.IO) {
