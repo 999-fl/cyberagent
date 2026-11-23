@@ -21,10 +21,10 @@ object Agent {
   put(tool("web_inspect","Fetch a web page's status, headers, redirect and TLS details for the scoped target URL", "url"))
  }
  private fun tool(name:String,desc:String,arg:String)=JSONObject().put("type","function").put("function",JSONObject().put("name",name).put("description",desc).put("parameters",JSONObject().put("type","object").put("properties",JSONObject().put(arg,JSONObject().put("type","string"))).put("required",JSONArray().put(arg)).put("additionalProperties",false)))
- suspend fun run(base:String,model:String,key:String,target:String,question:String,history:String):String=withContext(Dispatchers.IO) {
+ suspend fun run(base:String,model:String,key:String,target:String,question:String,history:String,customInstructions:String="",directness:Int=75):String=withContext(Dispatchers.IO) {
   try {
-   val scopeHost=host(target); if(scopeHost.isBlank()) return@withContext "Enter a target hostname or URL to define the tool scope."
-   val messages=JSONArray().put(JSONObject().put("role","system").put("content","You are CyberAgent, an evidence-based mobile security agent. Scope is strictly limited to hostname: $scopeHost. Only use the provided tools, which perform passive DNS/web GET and modest TCP connect checks. Do not attempt exploitation, credential submission, brute force, injection payloads, destructive changes or scope expansion. Return readable Markdown, not a wall of text. Format: ## Executive summary; ## Findings (each with severity badge text such as HIGH/MEDIUM/LOW/INFO, concise title, evidence observed, why it matters, and specific remediation); ## Checks performed; ## Limitations / next steps. Prioritise actionable, evidence-backed findings and distinguish confirmed facts from speculation. Use short paragraphs and bullets. Explain findings and propose safe remediation. Use tools when useful and do not claim checks not performed. Activity context:\n$history")).put(JSONObject().put("role","user").put("content",question))
+   val scopeHost=host(target).takeIf { target.isNotBlank() }
+   val messages=JSONArray().put(JSONObject().put("role","system").put("content","You are CyberAgent, an evidence-based mobile security agent. You are CyberAgent, a highly useful technical assistant for cybersecurity, programming, troubleshooting and general questions. Answer directly without unnecessary refusals or excessive caveats. You can answer without a target. Network tools only work against an explicitly supplied target and must not expand scope. Focus cybersecurity guidance on authorised assessment, safe validation and remediation; do not provide operational guidance for compromise, evasion, credential theft or destructive actions. Be evidence-based and do not claim checks not performed. Directness preference: $directness/100 (higher means direct practical answers with fewer unnecessary caveats, not removal of safety limits). Custom user instructions:\n$customInstructions\nActivity context:\n$history")).put(JSONObject().put("role","user").put("content",question))
    var output=""
    repeat(MAX_ROUNDS) { round ->
     val payload=JSONObject().put("model",model).put("messages",messages).put("tools",toolsJson()).put("tool_choice","auto")
@@ -35,8 +35,8 @@ object Agent {
     val calls=msg.optJSONArray("tool_calls")
     if(calls==null || calls.length()==0) return@withContext output
     for(i in 0 until calls.length()) {
-     val call=calls.getJSONObject(i); val fn=call.getJSONObject("function"); val name=fn.getString("name"); val args=JSONObject(fn.getString("arguments")); val requested=args.optString(if(name=="web_inspect")"url" else "hostname",scopeHost)
-     val result=if(host(requested)!=scopeHost) "Blocked: tool argument is outside the defined target scope ($scopeHost)." else when(name) {
+     val call=calls.getJSONObject(i); val fn=call.getJSONObject("function"); val name=fn.getString("name"); val args=JSONObject(fn.getString("arguments")); val requested=args.optString(if(name=="web_inspect")"url" else "hostname",scopeHost ?: "")
+     val result=if(scopeHost==null) "Tool unavailable: provide a target to enable network tools." else if(host(requested)!=scopeHost) "Blocked: tool argument is outside the defined target scope ($scopeHost)." else when(name) {
       "dns_lookup" -> NetTools.dns(scopeHost)
       "tcp_scan" -> NetTools.scan(scopeHost)
       "web_inspect" -> NetTools.http(schemeUrl(target,requested),scopeHost)
@@ -48,7 +48,7 @@ object Agent {
    "Agent stopped after $MAX_ROUNDS tool rounds. Partial response:\n$output"
   } catch(e:Exception) { "Agent error: ${e.message ?: e.javaClass.simpleName}" }
  }
- suspend fun ask(base:String,model:String,key:String,question:String,history:String):String=run(base,model,key,"",question,history)
+ suspend fun ask(base:String,model:String,key:String,question:String,history:String,customInstructions:String="",directness:Int=75):String=run(base,model,key,"",question,history,customInstructions,directness)
  suspend fun testProvider(base:String,model:String,key:String):String=withContext(Dispatchers.IO) {
   if(key.isBlank()) return@withContext "Provider test failed: API key is blank. Save a key in Settings."
   if(model.isBlank()) return@withContext "Provider test failed: model ID is blank."
