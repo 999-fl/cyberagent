@@ -55,7 +55,17 @@ object NetTools {
     forms.take(10).forEachIndexed { i,form -> checks.append("Form ${i+1}: ${form.replace(Regex("\\s+")," ").take(400)}\n") }
     val inputs=Regex("<input\\b[^>]*>",RegexOption.IGNORE_CASE).findAll(body).map{it.value}.toList()
     checks.append("Input fields found: ${inputs.size}\n")
-    inputs.take(25).forEach { tag -> val type=Regex("type=[\\\"']?([^\\\"'\\s>]+)",RegexOption.IGNORE_CASE).find(tag)?.groupValues?.get(1) ?: "text"; val name=Regex("name=[\\\"']?([^\\\"'\\s>]+)",RegexOption.IGNORE_CASE).find(tag)?.groupValues?.get(1) ?: "(unnamed)"; checks.append("Input: type=$type name=$name\n") }
+    inputs.take(25).forEach { tag -> val type=Regex("type=[\\\"']?([^\\\"'\\\\s>]+)",RegexOption.IGNORE_CASE).find(tag)?.groupValues?.get(1) ?: "text"; val name=Regex("name=[\\\"']?([^\\\"'\\\\s>]+)",RegexOption.IGNORE_CASE).find(tag)?.groupValues?.get(1) ?: "(unnamed)"; checks.append("Input: type=$type name=$name\\n") }
+    val passwordFields=inputs.count { Regex("type=[\\\"']?password",RegexOption.IGNORE_CASE).containsMatchIn(it) }
+    if(passwordFields>0) {
+     checks.append("Passive form review: $passwordFields password field(s) detected.\\n")
+     if(!url.startsWith("https://",true)) checks.append("WARNING: Password fields observed over non-HTTPS page URL. Verify secure transport before handling credentials.\\n")
+     else checks.append("Note: Password fields observed on HTTPS; this alone does not establish form security.\\n")
+    }
+    forms.forEachIndexed { i,form ->
+     val method=Regex("method=[\\\"']?([^\\\"'\\\\s>]+)",RegexOption.IGNORE_CASE).find(form)?.groupValues?.get(1)?.uppercase() ?: "GET (default)"
+     if(method=="GET" && passwordFields>0) checks.append("Review: form(s) use GET/default method while password fields are present; verify form association and ensure credentials are not placed in URLs.\\n")
+    }
     c.disconnect()
     if(status in 300..399 && !location.isNullOrBlank() && hop<4) {
       val next=URL(URL(url),location).toString()
