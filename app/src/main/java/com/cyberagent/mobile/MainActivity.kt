@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -50,6 +51,14 @@ fun CyberAgentApp() {
     var busy by remember { mutableStateOf(false) }
     fun append(message: String) { val stamp = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")); log = (log + "\n\n[" + stamp + "] " + message).takeLast(24000) }
     val apkPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) { busy = true; scope.launch { try { append(ApkInspector.inspect(context, uri)) } finally { busy = false } } } }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        busy = true
+        scope.launch {
+            try { append(NetTools.wifi(context)) }
+            catch (e: Exception) { append("Wi-Fi inventory failed: ${e.message}") }
+            finally { busy = false }
+        }
+    }
 
     MaterialTheme(colorScheme = darkColorScheme(
         primary = androidx.compose.ui.graphics.Color(0xFF76E5B1),
@@ -91,6 +100,24 @@ fun CyberAgentApp() {
                         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("APK REVIEW", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Text("Inspect an Android APK permission inventory and metadata locally.", color = MaterialTheme.colorScheme.onSurfaceVariant); Button(onClick = { apkPicker.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream")) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Select APK to inspect") } } }
                     }
                     item {
+                        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("WI-FI INVENTORY", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Text("Review the active network, local gateway/DNS configuration and nearby Wi-Fi metadata. Passive and read-only.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Button(onClick = {
+                                    val fineGranted=ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION)==android.content.pm.PackageManager.PERMISSION_GRANTED
+                                    val coarseGranted=ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION)==android.content.pm.PackageManager.PERMISSION_GRANTED
+                                    if(fineGranted || coarseGranted) {
+                                        busy=true
+                                        scope.launch { try { append(NetTools.wifi(context)) } catch(e:Exception){ append("Wi-Fi inventory failed: ${e.message}") } finally { busy=false } }
+                                    } else {
+                                        locationPermissionLauncher.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION,android.Manifest.permission.ACCESS_COARSE_LOCATION))
+                                    }
+                                }, enabled=!busy, modifier=Modifier.fillMaxWidth()) { Text("Inspect local Wi-Fi") }
+                            }
+                        }
+                    }
+                    item {
                         Text("QUICK RECON", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             ToolCard("DNS", "Lookup", Icons.Default.Info, Modifier.weight(1f), !busy && target.isNotBlank()) {
@@ -102,6 +129,9 @@ fun CyberAgentApp() {
                             ToolCard("HTTP", "Inspect", Icons.Default.Search, Modifier.weight(1f), !busy && target.isNotBlank()) {
                                 busy = true; scope.launch { try { append(NetTools.http(target)) } catch (e: Exception) { append("HTTP error: ${e.message}") } finally { busy = false } }
                             }
+                            ToolCard("TLS", "Certificate", Icons.Default.Info, Modifier.weight(1f), !busy && target.isNotBlank()) {
+                                busy = true; scope.launch { try { append(NetTools.tls(target)) } catch (e: Exception) { append("TLS error: ${e.message}") } finally { busy = false } }
+                            }
                         }
                     }
                     item {
@@ -112,6 +142,7 @@ fun CyberAgentApp() {
                                 try { append(NetTools.dns(target)) } catch (e: Exception) { append("DNS stage failed: ${e.message}") }
                                 try { append(NetTools.scan(target)) } catch (e: Exception) { append("TCP stage failed: ${e.message}") }
                                 try { append(NetTools.http(target)) } catch (e: Exception) { append("HTTP stage failed: ${e.message}") }
+                                try { append(NetTools.tls(target)) } catch (e: Exception) { append("TLS stage failed: ${e.message}") }
                                 append("=== Combined reconnaissance completed (stage errors recorded) ===")
                                 busy = false
                             }
@@ -121,11 +152,12 @@ fun CyberAgentApp() {
                         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("AI ANALYSIS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                                OutlinedTextField(prompt, { prompt = it }, label = { Text("Analysis objective") }, modifier = Modifier.fillMaxWidth(), minLines = 2, shape = RoundedCornerShape(14.dp))
+                                OutlinedTextField(prompt, { prompt = it }, label = { Text("Pentest question or analysis objective") }, placeholder = { Text("Summarise verified risks and recommend safe next checks") }, modifier = Modifier.fillMaxWidth(), minLines = 2, shape = RoundedCornerShape(14.dp))
                                 Button(onClick = {
                                     busy = true
-                                    scope.launch { try { aiOutput = Agent.run(endpoint, model, apiKey, target, prompt, log, customInstructions, directness) } catch (e: Exception) { aiOutput = "Agent error: ${e.message}" } finally { busy = false } }
-                                }, enabled = !busy && prompt.isNotBlank() && apiKey.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Working…" else "Run analysis") }
+                                    val objective=prompt.ifBlank { "Analyse all collected evidence for HTTP, TLS, DNS, TCP and Wi-Fi findings. Produce a concise pentest summary, rank verified risks, explain impact and confidence, provide concrete remediation, and list only safe authorised follow-up checks." }
+                                    scope.launch { try { aiOutput = Agent.run(endpoint, model, apiKey, target, objective, log, customInstructions, directness) } catch (e: Exception) { aiOutput = "Agent error: ${e.message}" } finally { busy = false } }
+                                }, enabled = !busy && apiKey.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Analysing evidence…" else "Generate pentest summary") }
                                 if (apiKey.isBlank()) Text("Set an API key in Settings to enable AI.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("AI RESULTS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background), shape = RoundedCornerShape(16.dp)) { Column(Modifier.padding(14.dp)) { Text(aiOutput, style = MaterialTheme.typography.bodyLarge, lineHeight = MaterialTheme.typography.bodyLarge.lineHeight) } }
