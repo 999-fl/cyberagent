@@ -21,9 +21,16 @@ import javax.net.ssl.SSLContext
 object NetTools {
  private val ports = listOf(21 to "FTP",22 to "SSH",23 to "Telnet",25 to "SMTP",53 to "DNS",80 to "HTTP",110 to "POP3",139 to "NetBIOS",143 to "IMAP",445 to "SMB",554 to "RTSP",631 to "IPP",443 to "HTTPS",8080 to "HTTP-alt",8443 to "HTTPS-alt",9000 to "Common-alt",3389 to "RDP")
  suspend fun scan(host:String):String = withContext(Dispatchers.IO) {
+  return@withContext scan(host,1,65535)
+ }
+ suspend fun scan(host:String,startPort:Int,endPort:Int):String = withContext(Dispatchers.IO) {
   val h=cleanHost(host)
-  val results=ports.map { (port,service) -> async(Dispatchers.IO) { try { Socket().use { s -> s.connect(java.net.InetSocketAddress(h,port),650); "OPEN $port ($service)" } } catch (_:Exception){ null } } }.awaitAll().filterNotNull()
-  val out=StringBuilder("TCP connect scan of $h (${ports.size} common ports):\n")
+  val start=startPort.coerceIn(1,65535)
+  val end=endPort.coerceIn(start,65535)
+  val results=(start..end).chunked(256).flatMap { chunk ->
+   chunk.map { port -> async(Dispatchers.IO) { try { Socket().use { s -> s.connect(java.net.InetSocketAddress(h,port),650); "OPEN $port${knownService(port)}" } } catch (_:Exception){ null } } }.awaitAll().filterNotNull()
+  }
+  val out=StringBuilder("TCP connect scan of $h ($start-$end):\n")
   if(results.isEmpty()) out.append("No common TCP ports reachable (or scan blocked).") else results.forEach { out.append(it).append('\n') }
   out.toString()
  }
@@ -35,9 +42,7 @@ object NetTools {
  suspend fun http(raw:String,allowedHost:String):String = withContext(Dispatchers.IO) {
   try {
    var url=if(raw.startsWith("http://")||raw.startsWith("https://")) raw else "https://$raw"; val visited=mutableListOf<String>()
-   val scope=cleanHost(allowedHost)
-   for (hop in 0 until 5) {
-    if(cleanHost(url)!=scope) return@withContext "Blocked redirect/request outside scope ($scope): $url"
+   while(true) {
     if(url in visited) return@withContext "Redirect loop detected:\n"+visited.joinToString(" → ")
     visited.add(url)
     val c=URL(url).openConnection() as HttpURLConnection; c.connectTimeout=7000;c.readTimeout=7000;c.instanceFollowRedirects=false;c.requestMethod="GET";c.setRequestProperty("User-Agent","CyberAgent-Android/0.2")
@@ -86,14 +91,12 @@ object NetTools {
      if(method=="GET" && passwordFields>0) checks.append("Review: form(s) use GET/default method while password fields are present; verify form association and ensure credentials are not placed in URLs.\n")
     }
     c.disconnect()
-    if(status in 300..399 && !location.isNullOrBlank() && hop<4) {
+    if(status in 300..399 && !location.isNullOrBlank()) {
       val next=URL(URL(url),location).toString()
-      if(cleanHost(next)!=scope) return@withContext "Redirect blocked: destination outside defined scope ($scope).\nRedirect chain: ${visited.joinToString(" → ")} → $next"
       url=next; continue
     }
     return@withContext "URL: $url\nStatus: $status\n$tls\nRedirect chain: ${visited.joinToString(" → ")}\nHeaders:\n$headers\n$checks"
    }
-   "Redirect limit reached: ${visited.joinToString(" → ")}"
   } catch(e:Exception) { "Web inspection failed: ${e.message}" }
  }
   suspend fun wifi(context: Context):String = withContext(Dispatchers.IO) {
@@ -188,5 +191,6 @@ object NetTools {
    if(value==0) return "(none)"
    return "${value and 0xff}.${value shr 8 and 0xff}.${value shr 16 and 0xff}.${value shr 24 and 0xff}"
   }
+  private fun knownService(port:Int):String=ports.firstOrNull{it.first==port}?.let{ " (${it.second})" } ?: ""
  private fun cleanHost(raw:String)=try { URL(if(raw.startsWith("http"))raw else "https://$raw").host.lowercase().removePrefix("www.") } catch(_:Exception) { raw.trim().removePrefix("http://").removePrefix("https://").substringBefore("/").substringBefore(":").lowercase().removePrefix("www.") }
 }

@@ -11,21 +11,20 @@ import org.json.JSONObject
 import java.net.URI
 import java.util.concurrent.TimeUnit
 
-/** Small, bounded function-calling loop. Tools are restricted to the declared target. */
+/** Small function-calling loop for network and analysis tools. */
 object Agent {
  private val client=OkHttpClient.Builder().connectTimeout(20,TimeUnit.SECONDS).readTimeout(60,TimeUnit.SECONDS).build()
  private const val MAX_ROUNDS=4
  private fun toolsJson()=JSONArray().apply {
-  put(tool("dns_lookup","Resolve DNS for the scoped target hostname", "hostname"))
-  put(tool("tcp_scan","Check a small common-port set using TCP connect for the scoped target", "hostname"))
-  put(tool("web_inspect","Fetch a web page's status, headers, redirect and TLS details for the scoped target URL", "url"))
-  put(tool("tls_inspect","Inspect the scoped target's TLS handshake, peer certificate, validity and SANs on port 443", "hostname"))
+  put(tool("dns_lookup","Resolve DNS for a target hostname", "hostname"))
+  put(tool("tcp_scan","Scan TCP ports using connect probes", "hostname"))
+  put(tool("web_inspect","Fetch a web page's status, headers, redirect and TLS details", "url"))
+  put(tool("tls_inspect","Inspect a target's TLS handshake, peer certificate, validity and SANs on port 443", "hostname"))
  }
  private fun tool(name:String,desc:String,arg:String)=JSONObject().put("type","function").put("function",JSONObject().put("name",name).put("description",desc).put("parameters",JSONObject().put("type","object").put("properties",JSONObject().put(arg,JSONObject().put("type","string"))).put("required",JSONArray().put(arg)).put("additionalProperties",false)))
  suspend fun run(base:String,model:String,key:String,target:String,question:String,history:String,customInstructions:String="",directness:Int=75):String=withContext(Dispatchers.IO) {
   try {
-   val scopeHost=host(target).takeIf { target.isNotBlank() }
-   val messages=JSONArray().put(JSONObject().put("role","system").put("content","You are CyberAgent, an evidence-based mobile pentest assistant. Answer directly and can answer without a target. Network tools only operate on an explicitly supplied target and must not expand scope. Never invent a finding or claim a check was performed unless it appears in the evidence. For pentest summaries, structure the response as: 1) Executive summary, 2) Verified findings ordered by severity, 3) For each finding include evidence, impact, confidence, and remediation, 4) Recommended follow-up checks, 5) Limitations. Separate verified evidence from hypotheses. Directness preference: $directness/100 (higher means direct practical answers with fewer unnecessary caveats). Custom user instructions:\n$customInstructions\nActivity context:\n$history")).put(JSONObject().put("role","user").put("content",question))
+    val messages=JSONArray().put(JSONObject().put("role","system").put("content","You are CyberAgent, an evidence-based mobile pentest assistant. Answer directly and can answer without a target. Never invent a finding or claim a check was performed unless it appears in the evidence. For pentest summaries, structure the response as: 1) Executive summary, 2) Verified findings ordered by severity, 3) For each finding include evidence, impact, confidence, and remediation, 4) Recommended follow-up checks, 5) Limitations. Separate verified evidence from hypotheses. Directness preference: $directness/100 (higher means direct practical answers with fewer unnecessary caveats). Custom user instructions:\n$customInstructions\nActivity context:\n$history")).put(JSONObject().put("role","user").put("content",question))
    var output=""
    repeat(MAX_ROUNDS) { round ->
     val payload=JSONObject().put("model",model).put("messages",messages).put("tools",toolsJson()).put("tool_choice","auto")
@@ -36,12 +35,12 @@ object Agent {
     val calls=msg.optJSONArray("tool_calls")
     if(calls==null || calls.length()==0) return@withContext output
     for(i in 0 until calls.length()) {
-     val call=calls.getJSONObject(i); val fn=call.getJSONObject("function"); val name=fn.getString("name"); val args=JSONObject(fn.getString("arguments")); val requested=args.optString(if(name=="web_inspect")"url" else "hostname",scopeHost ?: "")
-     val result=if(scopeHost==null) "Tool unavailable: provide a target to enable network tools." else if(host(requested)!=scopeHost) "Blocked: tool argument is outside the defined target scope ($scopeHost)." else when(name) {
-      "dns_lookup" -> NetTools.dns(scopeHost)
-      "tcp_scan" -> NetTools.scan(scopeHost)
-      "web_inspect" -> NetTools.http(schemeUrl(target,requested),scopeHost)
-      "tls_inspect" -> NetTools.tls(scopeHost)
+     val call=calls.getJSONObject(i); val fn=call.getJSONObject("function"); val name=fn.getString("name"); val args=JSONObject(fn.getString("arguments")); val requested=args.optString(if(name=="web_inspect")"url" else "hostname",target)
+     val result=when(name) {
+      "dns_lookup" -> NetTools.dns(requested)
+      "tcp_scan" -> NetTools.scan(requested)
+      "web_inspect" -> NetTools.http(schemeUrl(target,requested),host(requested))
+      "tls_inspect" -> NetTools.tls(requested)
       else -> "Tool not registered."
      }
      messages.put(JSONObject().put("role","tool").put("tool_call_id",call.optString("id")).put("content",result))
