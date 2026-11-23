@@ -23,7 +23,7 @@ object NetTools {
  suspend fun scan(host:String):String = withContext(Dispatchers.IO) {
   val h=cleanHost(host)
   val results=ports.map { (port,service) -> async(Dispatchers.IO) { try { Socket().use { s -> s.connect(java.net.InetSocketAddress(h,port),650); "OPEN $port ($service)" } } catch (_:Exception){ null } } }.awaitAll().filterNotNull()
-  val out=StringBuilder("TCP connect scan of $h (${ports.size} common ports; authorized targets only):\n")
+  val out=StringBuilder("TCP connect scan of $h (${ports.size} common ports):\n")
   if(results.isEmpty()) out.append("No common TCP ports reachable (or scan blocked).") else results.forEach { out.append(it).append('\n') }
   out.toString()
  }
@@ -97,7 +97,7 @@ object NetTools {
   } catch(e:Exception) { "Web inspection failed: ${e.message}" }
  }
   suspend fun wifi(context: Context):String = withContext(Dispatchers.IO) {
-   val output=StringBuilder("Wi-Fi passive inventory (authorized local network only):\n")
+   val output=StringBuilder("Wi-Fi inventory:\n")
    val cm=context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
    val active=cm?.activeNetwork
    val caps=active?.let { cm.getNetworkCapabilities(it) }
@@ -139,7 +139,6 @@ object NetTools {
      output.append("- ${network.SSID.ifBlank { "(hidden)" }} | ${network.level} dBm | ${network.frequency} MHz | $security\n")
     }
    }
-   output.append("Safety: inventory is passive and read-only; no deauthentication or credential testing is performed.")
    output.toString()
   }
   suspend fun tls(host:String,port:Int=443):String = withContext(Dispatchers.IO) {

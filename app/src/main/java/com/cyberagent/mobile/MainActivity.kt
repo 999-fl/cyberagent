@@ -103,7 +103,7 @@ fun CyberAgentApp() {
                         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("WI-FI INVENTORY", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                                Text("Review the active network, local gateway/DNS configuration and nearby Wi-Fi metadata. Passive and read-only.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Review the active network, local gateway/DNS configuration and nearby Wi-Fi metadata.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Button(onClick = {
                                     val fineGranted=ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION)==android.content.pm.PackageManager.PERMISSION_GRANTED
                                     val coarseGranted=ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION)==android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -152,10 +152,10 @@ fun CyberAgentApp() {
                         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("AI ANALYSIS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                                OutlinedTextField(prompt, { prompt = it }, label = { Text("Pentest question or analysis objective") }, placeholder = { Text("Summarise verified risks and recommend safe next checks") }, modifier = Modifier.fillMaxWidth(), minLines = 2, shape = RoundedCornerShape(14.dp))
+                                OutlinedTextField(prompt, { prompt = it }, label = { Text("Pentest question or analysis objective") }, placeholder = { Text("Summarise verified risks and recommend next checks") }, modifier = Modifier.fillMaxWidth(), minLines = 2, shape = RoundedCornerShape(14.dp))
                                 Button(onClick = {
                                     busy = true
-                                    val objective=prompt.ifBlank { "Analyse all collected evidence for HTTP, TLS, DNS, TCP and Wi-Fi findings. Produce a concise pentest summary, rank verified risks, explain impact and confidence, provide concrete remediation, and list only safe authorised follow-up checks." }
+                                    val objective=prompt.ifBlank { "Analyse all collected evidence for HTTP, TLS, DNS, TCP and Wi-Fi findings. Produce a concise pentest summary, rank verified risks, explain impact and confidence, provide concrete remediation, and list practical follow-up checks." }
                                     scope.launch { try { aiOutput = Agent.run(endpoint, model, apiKey, target, objective, log, customInstructions, directness) } catch (e: Exception) { aiOutput = "Agent error: ${e.message}" } finally { busy = false } }
                                 }, enabled = !busy && apiKey.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Analysing evidence…" else "Generate pentest summary") }
                                 if (apiKey.isBlank()) Text("Set an API key in Settings to enable AI.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -216,7 +216,7 @@ fun CyberAgentApp() {
                     Text("AI BEHAVIOUR", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     Text("Directness / caveats: $directness%", style = MaterialTheme.typography.bodyMedium)
                     Slider(value = directness.toFloat(), onValueChange = { directness = it.toInt() }, valueRange = 0f..100f, steps = 9)
-                    Text("Higher settings favour direct, practical answers with fewer unnecessary caveats. This does not disable safety limits.", style = MaterialTheme.typography.bodySmall)
+                    Text("Higher settings favour direct, practical answers with fewer unnecessary caveats.", style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(customInstructions, { customInstructions = it }, label = { Text("Custom AI instructions") }, placeholder = { Text("Personality, formatting, expertise, preferred workflow…") }, modifier = Modifier.fillMaxWidth(), minLines = 5)
                     Text("Custom instructions affect future analyses.", style = MaterialTheme.typography.bodySmall)
                 } },
