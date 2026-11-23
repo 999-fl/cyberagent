@@ -39,7 +39,7 @@ object NetTools {
   try { InetAddress.getAllByName(h).joinToString("\n") { "$h → ${it.hostAddress}" } } catch(e:Exception) { "DNS error: ${e.message}" }
  }
  suspend fun http(raw:String):String = http(raw,cleanHost(raw))
- suspend fun http(raw:String,allowedHost:String):String = withContext(Dispatchers.IO) {
+ suspend fun http(raw:String,allowedHost:String):String = withContext<String>(Dispatchers.IO) {
   try {
    var url=if(raw.startsWith("http://")||raw.startsWith("https://")) raw else "https://$raw"; val visited=mutableListOf<String>()
    while(true) {
