@@ -39,7 +39,16 @@ object NetTools {
     val required=listOf("Strict-Transport-Security","Content-Security-Policy","X-Content-Type-Options","X-Frame-Options","Referrer-Policy")
     required.forEach { name -> if(headerMap.keys.any{it.equals(name,true)}) checks.append("PRESENT: $name\n") else checks.append("MISSING: $name\n") }
     val cookies=headerMap.entries.filter{it.key.equals("Set-Cookie",true)}.flatMap{it.value}
-    cookies.forEach { cookie -> checks.append("Cookie flags: ${cookie.substringAfter(";").trim()}\n") }
+    if(cookies.isEmpty()) checks.append("Cookies: no Set-Cookie headers observed.\n")
+    cookies.forEachIndexed { index,cookie ->
+     val parts=cookie.split(";").map{it.trim()}
+     val flags=parts.drop(1).map{it.substringBefore("=").trim().lowercase()}.toSet()
+     checks.append("Cookie ${index+1}: ${parts.firstOrNull()?.substringBefore("=")?.take(80) ?: "(unnamed)"}\n")
+     listOf("secure","httponly","samesite").forEach { flag ->
+      if(flag in flags) checks.append("  PRESENT: $flag\n") else checks.append("  MISSING: $flag\n")
+     }
+     parts.drop(1).filter{it.lowercase().startsWith("samesite=")}.forEach{checks.append("  $it\n")}
+    }
     val body=try { val stream=if(status>=400)c.errorStream else c.inputStream; stream?.bufferedReader()?.use{it.readText().take(200000)} ?: "" } catch(_:Exception){""}
     val forms=Regex("<form\\b[^>]*>",RegexOption.IGNORE_CASE).findAll(body).map{it.value}.toList()
     checks.append("Forms found: ${forms.size}\n")
