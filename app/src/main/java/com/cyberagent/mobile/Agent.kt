@@ -58,7 +58,20 @@ object Agent {
    val request=Request.Builder().url(endpoint).addHeader("Authorization","Bearer $key").addHeader("Content-Type","application/json").post(payload.toString().toRequestBody("application/json".toMediaType())).build()
    client.newCall(request).execute().use { r ->
     val body=r.body?.string().orEmpty()
-    if(r.isSuccessful) "Provider test successful (HTTP ${r.code}). Model responded."
+    if(r.isSuccessful) {
+     try {
+      val parsed=JSONObject(body)
+      val choices=parsed.optJSONArray("choices")
+      val message=choices?.optJSONObject(0)?.optJSONObject("message")
+      if(message==null) "Provider returned HTTP ${r.code}, but the response format was unexpected. Check whether this endpoint supports chat completions."
+      else {
+       val reply=message.optString("content","").trim()
+       if(reply.isNotBlank()) "Provider test successful (HTTP ${r.code}). Model response: ${reply.take(120)}"
+       else if(message.has("tool_calls")) "Provider test successful (HTTP ${r.code}). Response contains tool calls instead of text."
+       else "Provider returned HTTP ${r.code}, but the model response was empty."
+      }
+     } catch(_:Exception) { "Provider returned HTTP ${r.code}, but its response was not valid JSON." }
+    }
     else {
      val detail=try { JSONObject(body).optJSONObject("error")?.optString("message") ?: body } catch(_:Exception){body}
      when(r.code) {
