@@ -105,13 +105,14 @@ fun CyberAgentApp() {
                     item {
                         Button(onClick = {
                             busy = true
-                            scope.launch { try {
+                            scope.launch {
                                 append("=== Combined reconnaissance started ===")
-                                append(NetTools.dns(target))
-                                append(NetTools.scan(target))
-                                append(NetTools.http(target))
-                                append("=== Combined reconnaissance completed ===")
-                            } catch (e: Exception) { append("Combined recon error: ${e.message}") } finally { busy = false } }
+                                try { append(NetTools.dns(target)) } catch (e: Exception) { append("DNS stage failed: ${e.message}") }
+                                try { append(NetTools.scan(target)) } catch (e: Exception) { append("TCP stage failed: ${e.message}") }
+                                try { append(NetTools.http(target)) } catch (e: Exception) { append("HTTP stage failed: ${e.message}") }
+                                append("=== Combined reconnaissance completed (stage errors recorded) ===")
+                                busy = false
+                            }
                         }, enabled = !busy && target.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Run all reconnaissance") }
                     }
                     item {
