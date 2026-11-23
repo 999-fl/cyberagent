@@ -39,7 +39,7 @@ fun CyberAgentApp() {
     val prefs = context.getSharedPreferences("cyberagent_config", Context.MODE_PRIVATE)
     var endpoint by remember { mutableStateOf(prefs.getString("endpoint", "https://openrouter.ai/api/v1") ?: "") }
     var model by remember { mutableStateOf(prefs.getString("model", "deepseek/deepseek-chat") ?: "") }
-    var settingsOpen by remember { mutableStateOf(false) }
+    var settingsOpen by remember { mutableStateOf(false) }\n    var customInstructions by remember { mutableStateOf(prefs.getString("custom_instructions", "") ?: "") }\n    var directness by remember { mutableIntStateOf(prefs.getInt("directness", 75).coerceIn(0, 100)) }
     var providerTestResult by remember { mutableStateOf("") }
     var target by remember { mutableStateOf("") }
     var prompt by remember { mutableStateOf("") }
@@ -122,8 +122,8 @@ fun CyberAgentApp() {
                                 OutlinedTextField(prompt, { prompt = it }, label = { Text("Analysis objective") }, modifier = Modifier.fillMaxWidth(), minLines = 2, shape = RoundedCornerShape(14.dp))
                                 Button(onClick = {
                                     busy = true
-                                    scope.launch { try { aiOutput = Agent.run(endpoint, model, apiKey, target, prompt, log) } catch (e: Exception) { aiOutput = "Agent error: ${e.message}" } finally { busy = false } }
-                                }, enabled = !busy && prompt.isNotBlank() && apiKey.isNotBlank() && target.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Working…" else "Run analysis") }
+                                    scope.launch { try { aiOutput = Agent.run(endpoint, model, apiKey, target, prompt, log, customInstructions, directness) } catch (e: Exception) { aiOutput = "Agent error: ${e.message}" } finally { busy = false } }
+                                }, enabled = !busy && prompt.isNotBlank() && apiKey.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Working…" else "Run analysis") }
                                 if (apiKey.isBlank()) Text("Set an API key in Settings to enable AI.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("AI RESULTS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background), shape = RoundedCornerShape(16.dp)) { Column(Modifier.padding(14.dp)) { Text(aiOutput, style = MaterialTheme.typography.bodyLarge, lineHeight = MaterialTheme.typography.bodyLarge.lineHeight) } }
@@ -150,19 +150,26 @@ fun CyberAgentApp() {
         if (settingsOpen) {
             AlertDialog(
                 onDismissRequest = { settingsOpen = false },
-                title = { Text("Settings") },
-                text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("API PROVIDER", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                title = { Text("AI Settings") },
+                text = { Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("PROVIDER", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     OutlinedTextField(endpoint, { endpoint = it }, label = { Text("API base URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     OutlinedTextField(model, { model = it }, label = { Text("Model ID") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     OutlinedTextField(apiKey, { apiKey = it }, label = { Text("API key") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                    Text("API key encrypted using Android Keystore. Provider and model preferences are saved locally.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(onClick = { busy = true; providerTestResult = "Testing…"; scope.launch { try { providerTestResult = Agent.testProvider(endpoint, model, apiKey); append(providerTestResult) } catch (e: Exception) { providerTestResult = "Provider test failed: ${e.message}"; append(providerTestResult) } finally { busy = false } } }, enabled = !busy && apiKey.isNotBlank() && endpoint.isNotBlank() && model.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Testing provider…" else "Test provider connection") }
-                    if (providerTestResult.isNotBlank()) Text(providerTestResult, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(onClick = { busy = true; providerTestResult = "Testing…"; scope.launch { try { providerTestResult = Agent.testProvider(endpoint, model, apiKey); append(providerTestResult) } catch (e: Exception) { providerTestResult = "Provider test failed: ${e.message}"; append(providerTestResult) } finally { busy = false } }, enabled = !busy && apiKey.isNotBlank() && endpoint.isNotBlank() && model.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Testing provider…" else "Test provider connection") }
+                    if (providerTestResult.isNotBlank()) Text(providerTestResult, style = MaterialTheme.typography.bodySmall)
+                    Divider()
+                    Text("AI BEHAVIOUR", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Text("Directness / caveats: $directness%", style = MaterialTheme.typography.bodyMedium)
+                    Slider(value = directness.toFloat(), onValueChange = { directness = it.toInt() }, valueRange = 0f..100f, steps = 9)
+                    Text("Higher settings favour direct, practical answers with fewer unnecessary caveats. This does not disable safety limits.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(customInstructions, { customInstructions = it }, label = { Text("Custom AI instructions") }, placeholder = { Text("Personality, formatting, expertise, preferred workflow…") }, modifier = Modifier.fillMaxWidth(), minLines = 5)
+                    Text("Custom instructions affect future analyses.", style = MaterialTheme.typography.bodySmall)
                 } },
-                confirmButton = { TextButton(onClick = { try { KeyVault.save(context, apiKey); prefs.edit().putString("endpoint", endpoint.trim()).putString("model", model.trim()).apply(); append("Provider settings saved."); settingsOpen = false } catch (e: Exception) { append("Key save failed: ${e.message}") } }) { Text("Save") } },
-                dismissButton = { TextButton(onClick = { apiKey = ""; KeyVault.clear(context); append("Stored API key cleared."); settingsOpen = false }) { Text("Forget key") } }
+                confirmButton = { TextButton(onClick = { try { KeyVault.save(context, apiKey); prefs.edit().putString("endpoint", endpoint.trim()).putString("model", model.trim()).putString("custom_instructions", customInstructions).putInt("directness", directness).apply(); append("AI settings saved."); settingsOpen = false } catch (e: Exception) { append("Settings save failed: ${e.message}") } }) { Text("Save") } },
+                dismissButton = { TextButton(onClick = { apiKey = ""; KeyVault.clear(context); append("Stored API key cleared.") }) { Text("Forget key") } }
             )
+        }
         }
     }
 }
