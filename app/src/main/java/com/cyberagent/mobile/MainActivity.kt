@@ -46,7 +46,7 @@ fun CyberAgentApp() {
     var log by remember { mutableStateOf("Target evidence will appear here. Configure your provider in Settings to enable AI analysis.") }
     var aiOutput by remember { mutableStateOf("AI findings will appear in this dedicated panel.") }
     var busy by remember { mutableStateOf(false) }
-    fun append(message: String) { log = (log + "\n\n" + message).takeLast(24000) }
+    fun append(message: String) { val stamp = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")); log = (log + "\n\n[" + stamp + "] " + message).takeLast(24000) }
     val apkPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) { busy = true; scope.launch { try { append(ApkInspector.inspect(context, uri)) } finally { busy = false } } } }
 
     MaterialTheme(colorScheme = darkColorScheme(
