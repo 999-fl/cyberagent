@@ -39,7 +39,8 @@ fun CyberAgentApp() {
     val prefs = context.getSharedPreferences("cyberagent_config", Context.MODE_PRIVATE)
     var endpoint by remember { mutableStateOf(prefs.getString("endpoint", "https://openrouter.ai/api/v1") ?: "") }
     var model by remember { mutableStateOf(prefs.getString("model", "deepseek/deepseek-chat") ?: "") }
-    var settingsOpen by remember { mutableStateOf(false) }\n    var customInstructions by remember { mutableStateOf(prefs.getString("custom_instructions", "") ?: "") }\n    var directness by remember { mutableIntStateOf(prefs.getInt("directness", 75).coerceIn(0, 100)) }
+    var settingsOpen by remember { mutableStateOf(false) }
+    var customInstructions by remember { mutableStateOf(prefs.getString("custom_instructions", "") ?: "") }\n    var directness by remember { mutableIntStateOf(prefs.getInt("directness", 75).coerceIn(0, 100)) }
     var providerTestResult by remember { mutableStateOf("") }
     var target by remember { mutableStateOf("") }
     var prompt by remember { mutableStateOf("") }
@@ -169,7 +170,6 @@ fun CyberAgentApp() {
                 confirmButton = { TextButton(onClick = { try { KeyVault.save(context, apiKey); prefs.edit().putString("endpoint", endpoint.trim()).putString("model", model.trim()).putString("custom_instructions", customInstructions).putInt("directness", directness).apply(); append("AI settings saved."); settingsOpen = false } catch (e: Exception) { append("Settings save failed: ${e.message}") } }) { Text("Save") } },
                 dismissButton = { TextButton(onClick = { apiKey = ""; KeyVault.clear(context); append("Stored API key cleared.") }) { Text("Forget key") } }
             )
-        }
         }
     }
 }
