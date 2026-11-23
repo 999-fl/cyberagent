@@ -119,6 +119,7 @@ fun CyberAgentApp() {
                     }
                     item {
                         Text("QUICK RECON", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             ToolCard("DNS", "Lookup", Icons.Default.Info, Modifier.weight(1f), !busy && target.isNotBlank()) {
                                 busy = true; scope.launch { try { append(NetTools.dns(target)) } catch (e: Exception) { append("DNS error: ${e.message}") } finally { busy = false } }
@@ -126,11 +127,44 @@ fun CyberAgentApp() {
                             ToolCard("TCP", "Scan", Icons.Default.Info, Modifier.weight(1f), !busy && target.isNotBlank()) {
                                 busy = true; scope.launch { try { append(NetTools.scan(target)) } catch (e: Exception) { append("Scan error: ${e.message}") } finally { busy = false } }
                             }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             ToolCard("HTTP", "Inspect", Icons.Default.Search, Modifier.weight(1f), !busy && target.isNotBlank()) {
                                 busy = true; scope.launch { try { append(NetTools.http(target)) } catch (e: Exception) { append("HTTP error: ${e.message}") } finally { busy = false } }
                             }
                             ToolCard("TLS", "Certificate", Icons.Default.Info, Modifier.weight(1f), !busy && target.isNotBlank()) {
                                 busy = true; scope.launch { try { append(NetTools.tls(target)) } catch (e: Exception) { append("TLS error: ${e.message}") } finally { busy = false } }
+                            }
+                        }
+                        }
+                    }
+                    item {
+                        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("NETWORK DISCOVERY", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Text("Inspect local kernel routing, neighbor entries and responsive hosts on the active Wi-Fi subnet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                    Button(onClick = {
+                                        busy=true
+                                        scope.launch { try { append(NetTools.arpAndRoutes()) } catch(e:Exception){ append("Route inspection failed: ${e.message}") } finally { busy=false } }
+                                    }, enabled=!busy, modifier=Modifier.weight(1f)) { Text("ARP + routes") }
+                                    Button(onClick = {
+                                        busy=true
+                                        scope.launch { try { append(NetTools.discoverSubnet(context)) } catch(e:Exception){ append("Subnet discovery failed: ${e.message}") } finally { busy=false } }
+                                    }, enabled=!busy, modifier=Modifier.weight(1f)) { Text("Discover hosts") }
+                                }
+                            }
+                        }
+                    }
+                    item {
+                        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("WEB ENDPOINTS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Text("Check robots, sitemap, security metadata, API and common management paths.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Button(onClick = {
+                                    busy=true
+                                    scope.launch { try { append(NetTools.endpointDiscovery(target)) } catch(e:Exception){ append("Endpoint discovery failed: ${e.message}") } finally { busy=false } }
+                                }, enabled=!busy&&target.isNotBlank(), modifier=Modifier.fillMaxWidth()) { Text("Discover web endpoints") }
                             }
                         }
                     }
@@ -143,6 +177,7 @@ fun CyberAgentApp() {
                                 try { append(NetTools.scan(target)) } catch (e: Exception) { append("TCP stage failed: ${e.message}") }
                                 try { append(NetTools.http(target)) } catch (e: Exception) { append("HTTP stage failed: ${e.message}") }
                                 try { append(NetTools.tls(target)) } catch (e: Exception) { append("TLS stage failed: ${e.message}") }
+                                try { append(NetTools.endpointDiscovery(target)) } catch (e: Exception) { append("Endpoint discovery stage failed: ${e.message}") }
                                 append("=== Combined reconnaissance completed (stage errors recorded) ===")
                                 busy = false
                             }

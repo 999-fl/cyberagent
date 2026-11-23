@@ -19,6 +19,7 @@ object Agent {
   put(tool("dns_lookup","Resolve DNS for a target hostname", "hostname"))
   put(tool("tcp_scan","Scan TCP ports using connect probes", "hostname"))
   put(tool("web_inspect","Fetch a web page's status, headers, redirect and TLS details", "url"))
+  put(tool("endpoint_discovery","Probe common web metadata, API and management paths for a target", "url"))
   put(tool("tls_inspect","Inspect a target's TLS handshake, peer certificate, validity and SANs on port 443", "hostname"))
  }
  private fun tool(name:String,desc:String,arg:String)=JSONObject().put("type","function").put("function",JSONObject().put("name",name).put("description",desc).put("parameters",JSONObject().put("type","object").put("properties",JSONObject().put(arg,JSONObject().put("type","string"))).put("required",JSONArray().put(arg)).put("additionalProperties",false)))
@@ -40,6 +41,7 @@ object Agent {
       "dns_lookup" -> NetTools.dns(requested)
       "tcp_scan" -> NetTools.scan(requested)
       "web_inspect" -> NetTools.http(schemeUrl(target,requested),host(requested))
+      "endpoint_discovery" -> NetTools.endpointDiscovery(requested)
       "tls_inspect" -> NetTools.tls(requested)
       else -> "Tool not registered."
      }

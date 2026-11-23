@@ -7,11 +7,16 @@ import android.net.wifi.WifiManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.net.InetAddress
 import java.net.HttpURLConnection
 import java.net.Socket
 import java.net.URL
+import java.io.File
 import java.security.cert.X509Certificate
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -21,17 +26,41 @@ import javax.net.ssl.SSLContext
 object NetTools {
  private val ports = listOf(21 to "FTP",22 to "SSH",23 to "Telnet",25 to "SMTP",53 to "DNS",80 to "HTTP",110 to "POP3",139 to "NetBIOS",143 to "IMAP",445 to "SMB",554 to "RTSP",631 to "IPP",443 to "HTTPS",8080 to "HTTP-alt",8443 to "HTTPS-alt",9000 to "Common-alt",3389 to "RDP")
  suspend fun scan(host:String):String = withContext(Dispatchers.IO) {
-  return@withContext scan(host,1,65535)
+  val h=cleanHost(host)
+  val portList=ports.map { it.first }
+  scanPorts(h,portList,250)
  }
  suspend fun scan(host:String,startPort:Int,endPort:Int):String = withContext(Dispatchers.IO) {
   val h=cleanHost(host)
   val start=startPort.coerceIn(1,65535)
   val end=endPort.coerceIn(start,65535)
-  val results=(start..end).chunked(256).flatMap { chunk ->
-   chunk.map { port -> async(Dispatchers.IO) { try { Socket().use { s -> s.connect(java.net.InetSocketAddress(h,port),650); "OPEN $port${knownService(port)}" } } catch (_:Exception){ null } } }.awaitAll().filterNotNull()
+  val output=StringBuilder("TCP connect scan of $h ($start-$end):\n")
+  var openCount=0
+  (start..end).chunked(512).forEach { batch ->
+   val result=scanPorts(h,batch,250)
+   val openLines=result.lineSequence().filter { it.startsWith("OPEN ") }
+   openLines.forEach { output.append("$it\n"); openCount++ }
   }
-  val out=StringBuilder("TCP connect scan of $h ($start-$end):\n")
-  if(results.isEmpty()) out.append("No common TCP ports reachable (or scan blocked).") else results.forEach { out.append(it).append('\n') }
+  if(openCount==0) output.append("No tested ports reachable.")
+  output.toString()
+ }
+ private suspend fun scanPorts(host:String,portList:List<Int>,timeoutMs:Int):String=coroutineScope {
+  val semaphore=Semaphore(24)
+  val results=portList.map { port ->
+   async(Dispatchers.IO) {
+    ensureActive()
+    semaphore.withPermit {
+     try {
+      Socket().use { socket ->
+       socket.connect(java.net.InetSocketAddress(host,port),timeoutMs)
+       "OPEN $port${knownService(port)}"
+      }
+     } catch (_:Exception) { null }
+    }
+   }
+  }.awaitAll().filterNotNull()
+  val out=StringBuilder("TCP connect scan of $host (${portList.size} ports):\n")
+  if(results.isEmpty()) out.append("No tested ports reachable.") else results.forEach { out.append(it).append('\n') }
   out.toString()
  }
  suspend fun dns(host:String):String = withContext(Dispatchers.IO) {
@@ -188,10 +217,89 @@ object NetTools {
    return digest.joinToString("") { "%02X".format(it) }
   }
   private fun Collection<List<*>>.flattenStrings():String=flatMap { it.drop(1) }.map { it.toString() }.distinct().joinToString(", ")
+  suspend fun arpAndRoutes():String = withContext(Dispatchers.IO) {
+    val out=StringBuilder("Local kernel network table:\n")
+    val arp=File("/proc/net/arp").takeIf { it.exists() }?.readText().orEmpty()
+    val entries=arp.lines().drop(1).mapNotNull { line ->
+     val fields=line.trim().split(Regex("\\s+"))
+     if(fields.size>=6 && fields[0]!="IP address") {
+      val ip=fields[0]; val mac=fields[3]; val flags=fields[2]
+      if(mac!="00:00:00:00:00:00") "$ip  $mac  flags=$flags" else null
+     } else null
+    }
+    out.append("ARP/neighbor entries:\n")
+    if(entries.isEmpty()) out.append("(none exposed by Android kernel)\n") else entries.forEach { out.append("$it\n") }
+    val routes=File("/proc/net/route").takeIf { it.exists() }?.readText().orEmpty()
+    out.append("IPv4 routes:\n")
+    routes.lines().drop(1).filter { it.isNotBlank() }.take(30).forEach { line ->
+     val f=line.trim().split(Regex("\\s+"))
+     if(f.size>=8) out.append("${f[0]}  destination=${routeIp(f[1])}  gateway=${routeIp(f[2])}  mask=${routeIp(f[7])}  flags=${f[3]}\n")
+    }
+    out.toString()
+  }
+  suspend fun discoverSubnet(context:Context):String=coroutineScope {
+   val wm=context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+   val info=wm?.connectionInfo
+   val ip=info?.ipAddress ?: 0
+   if(ip==0) return@coroutineScope "Subnet discovery unavailable: no Wi-Fi IPv4 address."
+   val b1=ip and 0xff; val b2=ip shr 8 and 0xff; val b3=ip shr 16 and 0xff
+   val prefix24="$b1.$b2.$b3"
+   val semaphore=Semaphore(32)
+   val localHost=ip and 0xff
+   val results=(1..254).filter { it != localHost }.map { host ->
+    async(Dispatchers.IO) {
+     ensureActive()
+     for(port in listOf(80,443,22)) {
+      val found=semaphore.withPermit {
+       try {
+        Socket().use { socket -> socket.tcpNoDelay=true; socket.connect(java.net.InetSocketAddress("$prefix24.$host",port),220); port }
+       } catch (_:Exception) { null }
+      }
+      if(found!=null) {
+       return@async "$prefix24.$host  OPEN $found${knownService(found)}"
+      }
+     }
+     null
+    }
+   }.awaitAll().filterNotNull()
+   val out=StringBuilder("Subnet discovery on $prefix24.0/24:\n")
+   if(results.isEmpty()) out.append("No responsive hosts found on TCP 22, 80 or 443.") else results.forEach { out.append("$it\n") }
+   out.toString()
+  }
+  suspend fun endpointDiscovery(raw:String):String=withContext(Dispatchers.IO) {
+   var base=if(raw.startsWith("http://")||raw.startsWith("https://")) raw.trimEnd('/') else "https://$raw"
+   val urlBase=try { URL(base).let { URL(it.protocol,it.host,it.port.takeIf { p -> p!=-1 } ?: -1,"/").toString().trimEnd('/') } } catch(_:Exception){ base }
+   val paths=listOf("/robots.txt","/sitemap.xml","/.well-known/security.txt","/api","/swagger","/swagger/index.html","/openapi.json","/graphql","/admin","/login","/.git/HEAD")
+   val out=StringBuilder("Endpoint discovery for $urlBase:\n")
+   for(path in paths) {
+    try {
+     val c=URL(urlBase+path).openConnection() as HttpURLConnection
+     c.connectTimeout=3500;c.readTimeout=3500;c.instanceFollowRedirects=true;c.requestMethod="GET"
+     c.setRequestProperty("User-Agent","CyberAgent-Android/0.3")
+     val status=c.responseCode
+     val length=c.contentLength
+     val location=c.headerFields.entries.firstOrNull { it.key?.equals("Location",true)==true }?.value?.joinToString()
+     if(status !in 400..499 || path=="/robots.txt"||path=="/.well-known/security.txt") {
+      out.append("$status  $path")
+      if(length>=0) out.append("  bytes=$length")
+      if(!location.isNullOrBlank()) out.append("  location=$location")
+      out.append("\n")
+     }
+     c.disconnect()
+    } catch(e:Exception) { out.append("ERR  $path  ${e.message}\n") }
+   }
+   out.toString()
+  }
   private fun intIp(value:Int):String {
    if(value==0) return "(none)"
    return "${value and 0xff}.${value shr 8 and 0xff}.${value shr 16 and 0xff}.${value shr 24 and 0xff}"
   }
   private fun knownService(port:Int):String=ports.firstOrNull{it.first==port}?.let{ " (${it.second})" } ?: ""
+  private fun routeIp(hex:String):String {
+   return try {
+    val value=hex.toLong(16)
+    "${value and 0xff}.${value shr 8 and 0xff}.${value shr 16 and 0xff}.${value shr 24 and 0xff}"
+   } catch (_:Exception) { hex }
+  }
  private fun cleanHost(raw:String)=try { URL(if(raw.startsWith("http"))raw else "https://$raw").host.lowercase().removePrefix("www.") } catch(_:Exception) { raw.trim().removePrefix("http://").removePrefix("https://").substringBefore("/").substringBefore(":").lowercase().removePrefix("www.") }
 }
