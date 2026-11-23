@@ -63,6 +63,88 @@ object NetTools {
   if(results.isEmpty()) out.append("No tested ports reachable.") else results.forEach { out.append(it).append('\n') }
   out.toString()
  }
+ suspend fun validateTcp(host:String,port:Int):String = withContext(Dispatchers.IO) {
+  val h=cleanHost(host)
+  if(port !in 1..65535) return@withContext "VALIDATION INCONCLUSIVE: invalid TCP port."
+  val socket=Socket()
+  return@withContext try {
+   socket.connect(java.net.InetSocketAddress(h,port),3000)
+   socket.soTimeout=1500
+   val banner=try {
+    socket.getInputStream().readNBytes(1024).toString(Charsets.UTF_8)
+     .replace(Regex("[^\\x20-\\x7E\\r\\n]"),".").take(1024)
+   } catch (_:Exception){ "" }
+   val out=StringBuilder("TCP validation of $h:$port\n")
+   out.append("VERDICT: CONFIRMED REACHABLE\n")
+   out.append("Confidence: high\n")
+   out.append("Evidence: TCP connection completed successfully\n")
+   if(banner.isNotBlank()) out.append("Banner: ${banner.replace('\n',' ').take(300)}\n")
+   else out.append("Banner: unavailable until a protocol-specific request is sent\n")
+   out.append("Vulnerability status: NOT PROVEN - open ports are connectivity findings, not vulnerabilities.\n")
+   out.toString()
+  } catch(e:Exception) {
+   "TCP validation of $h:$port\nVERDICT: NOT REACHABLE\nConfidence: medium\nEvidence: ${e.javaClass.simpleName}: ${e.message}\nVulnerability status: NOT PROVEN"
+  } finally {
+   socket.close()
+  }
+ }
+ suspend fun validateHttp(raw:String):String=withContext(Dispatchers.IO) {
+  var base=if(raw.startsWith("http://")||raw.startsWith("https://")) raw.trimEnd('/') else "https://$raw"
+  val urlBase=try { URL(base).let { URL(it.protocol,it.host,it.port.takeIf { p -> p!=-1 } ?: -1,"/").toString().trimEnd('/') } } catch(_:Exception){ base }
+  val checks=listOf(
+   "/wp-login.php" to "WordPress login surface",
+   "/wp-admin/" to "WordPress admin surface",
+   "/.env" to "Environment configuration exposure",
+   "/.git/config" to "Git metadata exposure",
+   "/phpinfo.php" to "PHP diagnostic page",
+   "/server-status" to "Server status page",
+   "/actuator" to "Spring actuator surface",
+   "/swagger/index.html" to "API documentation",
+   "/backup.zip" to "Backup archive exposure",
+   "/wp-config.php.bak" to "WordPress configuration backup"
+  )
+  val out=StringBuilder("HTTP validation for $urlBase\n")
+  var confirmed=0
+  for((path,label) in checks) {
+   try {
+    val c=URL(urlBase+path).openConnection() as HttpURLConnection
+    c.connectTimeout=3500;c.readTimeout=3500;c.instanceFollowRedirects=false;c.requestMethod="GET"
+    c.setRequestProperty("User-Agent","CyberAgent-Android/0.3")
+    val status=c.responseCode
+    val body=try {
+     val stream=if(status>=400)c.errorStream else c.inputStream
+     stream?.bufferedReader()?.use { it.readText().take(32000) } ?: ""
+    } catch(_:Exception){""}
+    val lower=body.lowercase()
+    val marker=when(path) {
+     "/wp-login.php","/wp-admin/" -> lower.contains("wp-login")||lower.contains("wordpress")||lower.contains("log in")
+     "/.env" -> lower.contains("app_")||lower.contains("db_")||lower.contains("secret")||lower.contains("password")
+     "/.git/config" -> lower.contains("[core]")||lower.contains("repositoryformat")
+     "/phpinfo.php" -> lower.contains("php version")||lower.contains("phpinfo")
+     "/server-status" -> lower.contains("apache server status")||lower.contains("server uptime")
+     "/actuator" -> lower.contains("\"_links\"")||lower.contains("\"status\"")
+     "/swagger/index.html" -> lower.contains("swagger")||lower.contains("openapi")
+     "/backup.zip","/wp-config.php.bak" -> status==200&&body.length>32
+     else -> false
+    }
+    val verdict=if(status in 200..299 && marker) "CONFIRMED $label"
+    else if(status in 200..299) "ACCESSIBLE BUT NOT CONFIRMED SENSITIVE"
+    else if(status in 300..399) "REDIRECT RESPONSE"
+    else if(status==401||status==403) "ACCESS REQUIRES AUTHORIZATION"
+    else if(status==404) "NOT FOUND"
+    else "HTTP $status"
+    if(verdict.startsWith("CONFIRMED")) confirmed++
+    out.append("$path | HTTP $status | $verdict\n")
+    if(marker) out.append("  Evidence: response markers matched: $label\n")
+    c.disconnect()
+   } catch(e:Exception) {
+    out.append("$path | VALIDATION INCONCLUSIVE | ${e.javaClass.simpleName}\n")
+   }
+  }
+  out.append("Confirmed exposure count: $confirmed\n")
+  out.append("Open status note: reachable services and HTTP 200 responses are not automatically vulnerabilities.\n")
+  out.toString()
+ }
  suspend fun dns(host:String):String = withContext(Dispatchers.IO) {
   val h=cleanHost(host)
   try { InetAddress.getAllByName(h).joinToString("\n") { "$h → ${it.hostAddress}" } } catch(e:Exception) { "DNS error: ${e.message}" }

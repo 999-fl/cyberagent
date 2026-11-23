@@ -20,12 +20,13 @@ object Agent {
   put(tool("tcp_scan","Scan TCP ports using connect probes", "hostname"))
   put(tool("web_inspect","Fetch a web page's status, headers, redirect and TLS details", "url"))
   put(tool("endpoint_discovery","Probe common web metadata, API and management paths for a target", "url"))
+  put(tool("validate_http","Validate common HTTP exposures and return confirmed versus inconclusive evidence", "url"))
   put(tool("tls_inspect","Inspect a target's TLS handshake, peer certificate, validity and SANs on port 443", "hostname"))
  }
  private fun tool(name:String,desc:String,arg:String)=JSONObject().put("type","function").put("function",JSONObject().put("name",name).put("description",desc).put("parameters",JSONObject().put("type","object").put("properties",JSONObject().put(arg,JSONObject().put("type","string"))).put("required",JSONArray().put(arg)).put("additionalProperties",false)))
  suspend fun run(base:String,model:String,key:String,target:String,question:String,history:String,customInstructions:String="",directness:Int=75):String=withContext(Dispatchers.IO) {
   try {
-    val messages=JSONArray().put(JSONObject().put("role","system").put("content","You are CyberAgent, an evidence-based mobile pentest assistant. Answer directly and can answer without a target. Never invent a finding or claim a check was performed unless it appears in the evidence. For pentest summaries, structure the response as: 1) Executive summary, 2) Verified findings ordered by severity, 3) For each finding include evidence, impact, confidence, and remediation, 4) Recommended follow-up checks, 5) Limitations. Separate verified evidence from hypotheses. Directness preference: $directness/100 (higher means direct practical answers with fewer unnecessary caveats). Custom user instructions:\n$customInstructions\nActivity context:\n$history")).put(JSONObject().put("role","user").put("content",question))
+    val messages=JSONArray().put(JSONObject().put("role","system").put("content","You are CyberAgent, an evidence-based mobile pentest assistant. Answer directly and can answer without a target. Never invent a finding or claim a check was performed unless it appears in the evidence. Clearly distinguish discovery from validation: an open port, HTTP 200, missing header, or discovered path is not automatically a vulnerability. Only call a finding confirmed when validation evidence contains matching content or an actual service response proving the issue. For each finding report: type, verdict, confidence, exact evidence, observed status/banner/content marker, potential impact, remediation, and recommended safe follow-up. Structure reports as: 1) Executive summary, 2) Confirmed findings, 3) Discovered but unconfirmed items, 4) Inconclusive checks, 5) Recommended follow-up. Directness preference: $directness/100. Custom user instructions:\n$customInstructions\nActivity context:\n$history")).put(JSONObject().put("role","user").put("content",question))
    var output=""
    repeat(MAX_ROUNDS) { round ->
     val payload=JSONObject().put("model",model).put("messages",messages).put("tools",toolsJson()).put("tool_choice","auto")
@@ -42,6 +43,7 @@ object Agent {
       "tcp_scan" -> NetTools.scan(requested)
       "web_inspect" -> NetTools.http(schemeUrl(target,requested),host(requested))
       "endpoint_discovery" -> NetTools.endpointDiscovery(requested)
+      "validate_http" -> NetTools.validateHttp(requested)
       "tls_inspect" -> NetTools.tls(requested)
       else -> "Tool not registered."
      }

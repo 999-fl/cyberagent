@@ -46,6 +46,7 @@ fun CyberAgentApp() {
     var providerTestResult by remember { mutableStateOf("") }
     var target by remember { mutableStateOf("") }
     var prompt by remember { mutableStateOf("") }
+    var validationPort by remember { mutableStateOf("443") }
     var log by remember { mutableStateOf("Target evidence will appear here. Configure your provider in Settings to enable AI analysis.") }
     var aiOutput by remember { mutableStateOf("AI findings will appear in this dedicated panel.") }
     var busy by remember { mutableStateOf(false) }
@@ -159,12 +160,35 @@ fun CyberAgentApp() {
                     item {
                         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("WEB ENDPOINTS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                                Text("Check robots, sitemap, security metadata, API and common management paths.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("WEB FINDINGS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Text("Discovery lists reachable paths; validation proves whether sensitive content or an exposed management surface is accessible.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier=Modifier.fillMaxWidth()) {
+                                    Button(onClick = {
+                                        busy=true
+                                        scope.launch { try { append(NetTools.endpointDiscovery(target)) } catch(e:Exception){ append("Endpoint discovery failed: ${e.message}") } finally { busy=false } }
+                                    }, enabled=!busy&&target.isNotBlank(), modifier=Modifier.weight(1f)) { Text("Discover") }
+                                    Button(onClick = {
+                                        busy=true
+                                        scope.launch { try { append(NetTools.validateHttp(target)) } catch(e:Exception){ append("HTTP validation failed: ${e.message}") } finally { busy=false } }
+                                    }, enabled=!busy&&target.isNotBlank(), modifier=Modifier.weight(1f)) { Text("Validate HTTP") }
+                                }
+                            }
+                        }
+                    }
+                    item {
+                        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("TCP VALIDATION", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Text("Confirm a TCP connection and capture a protocol banner. Reachability alone is not a vulnerability.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                OutlinedTextField(validationPort, { validationPort=it.filter { c -> c.isDigit() }.take(5) }, label={Text("TCP port")}, singleLine=true, modifier=Modifier.fillMaxWidth())
                                 Button(onClick = {
-                                    busy=true
-                                    scope.launch { try { append(NetTools.endpointDiscovery(target)) } catch(e:Exception){ append("Endpoint discovery failed: ${e.message}") } finally { busy=false } }
-                                }, enabled=!busy&&target.isNotBlank(), modifier=Modifier.fillMaxWidth()) { Text("Discover web endpoints") }
+                                    val port=validationPort.toIntOrNull()
+                                    if(port==null) append("TCP validation failed: enter a valid port.")
+                                    else {
+                                        busy=true
+                                        scope.launch { try { append(NetTools.validateTcp(target,port)) } catch(e:Exception){ append("TCP validation failed: ${e.message}") } finally { busy=false } }
+                                    }
+                                }, enabled=!busy&&target.isNotBlank(), modifier=Modifier.fillMaxWidth()) { Text("Validate service") }
                             }
                         }
                     }
@@ -178,6 +202,7 @@ fun CyberAgentApp() {
                                 try { append(NetTools.http(target)) } catch (e: Exception) { append("HTTP stage failed: ${e.message}") }
                                 try { append(NetTools.tls(target)) } catch (e: Exception) { append("TLS stage failed: ${e.message}") }
                                 try { append(NetTools.endpointDiscovery(target)) } catch (e: Exception) { append("Endpoint discovery stage failed: ${e.message}") }
+                                try { append(NetTools.validateHttp(target)) } catch (e: Exception) { append("HTTP validation stage failed: ${e.message}") }
                                 append("=== Combined reconnaissance completed (stage errors recorded) ===")
                                 busy = false
                             }
