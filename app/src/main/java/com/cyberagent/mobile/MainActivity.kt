@@ -103,6 +103,18 @@ fun CyberAgentApp() {
                         }
                     }
                     item {
+                        Button(onClick = {
+                            busy = true
+                            scope.launch { try {
+                                append("=== Combined reconnaissance started ===")
+                                append(NetTools.dns(target))
+                                append(NetTools.scan(target))
+                                append(NetTools.http(target))
+                                append("=== Combined reconnaissance completed ===")
+                            } catch (e: Exception) { append("Combined recon error: ${e.message}") } finally { busy = false } }
+                        }, enabled = !busy && target.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Run all reconnaissance") }
+                    }
+                    item {
                         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("AI ANALYSIS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
