@@ -38,6 +38,7 @@ fun CyberAgentApp() {
     var endpoint by remember { mutableStateOf(prefs.getString("endpoint", "https://openrouter.ai/api/v1") ?: "") }
     var model by remember { mutableStateOf(prefs.getString("model", "deepseek/deepseek-chat") ?: "") }
     var settingsOpen by remember { mutableStateOf(false) }
+    var providerTestResult by remember { mutableStateOf("") }
     var target by remember { mutableStateOf("") }
     var prompt by remember { mutableStateOf("") }
     var log by remember { mutableStateOf("Ready. Configure your provider in Settings to enable AI analysis.") }
@@ -137,7 +138,8 @@ fun CyberAgentApp() {
                     OutlinedTextField(model, { model = it }, label = { Text("Model ID") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     OutlinedTextField(apiKey, { apiKey = it }, label = { Text("API key") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                     Text("API key encrypted using Android Keystore. Provider and model preferences are saved locally.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(onClick = { busy = true; scope.launch { try { append(Agent.testProvider(endpoint, model, apiKey)) } finally { busy = false } } }, enabled = !busy && apiKey.isNotBlank() && endpoint.isNotBlank() && model.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Testing provider…" else "Test provider connection") }
+                    Button(onClick = { busy = true; providerTestResult = "Testing…"; scope.launch { try { providerTestResult = Agent.testProvider(endpoint, model, apiKey); append(providerTestResult) } catch (e: Exception) { providerTestResult = "Provider test failed: ${e.message}"; append(providerTestResult) } finally { busy = false } } }, enabled = !busy && apiKey.isNotBlank() && endpoint.isNotBlank() && model.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Testing provider…" else "Test provider connection") }
+                    if (providerTestResult.isNotBlank()) Text(providerTestResult, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } },
                 confirmButton = { TextButton(onClick = { try { KeyVault.save(context, apiKey); prefs.edit().putString("endpoint", endpoint.trim()).putString("model", model.trim()).apply(); append("Provider settings saved."); settingsOpen = false } catch (e: Exception) { append("Key save failed: ${e.message}") } }) { Text("Save") } },
                 dismissButton = { TextButton(onClick = { apiKey = ""; KeyVault.clear(context); append("Stored API key cleared."); settingsOpen = false }) { Text("Forget key") } }
