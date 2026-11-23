@@ -41,7 +41,8 @@ fun CyberAgentApp() {
     var providerTestResult by remember { mutableStateOf("") }
     var target by remember { mutableStateOf("") }
     var prompt by remember { mutableStateOf("") }
-    var log by remember { mutableStateOf("Ready. Configure your provider in Settings to enable AI analysis.") }
+    var log by remember { mutableStateOf("Target evidence will appear here. Configure your provider in Settings to enable AI analysis.") }
+    var aiOutput by remember { mutableStateOf("AI findings will appear in this dedicated panel.") }
     var busy by remember { mutableStateOf(false) }
     fun append(message: String) { log = (log + "\n\n" + message).takeLast(24000) }
     val apkPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) { busy = true; scope.launch { try { append(ApkInspector.inspect(context, uri)) } finally { busy = false } } } }
@@ -106,9 +107,12 @@ fun CyberAgentApp() {
                                 OutlinedTextField(prompt, { prompt = it }, label = { Text("Analysis objective") }, modifier = Modifier.fillMaxWidth(), minLines = 2, shape = RoundedCornerShape(14.dp))
                                 Button(onClick = {
                                     busy = true
-                                    scope.launch { try { append(Agent.run(endpoint, model, apiKey, target, prompt, log)) } catch (e: Exception) { append("Agent error: ${e.message}") } finally { busy = false } }
+                                    scope.launch { try { aiOutput = Agent.run(endpoint, model, apiKey, target, prompt, log) } catch (e: Exception) { aiOutput = "Agent error: ${e.message}" } finally { busy = false } }
                                 }, enabled = !busy && prompt.isNotBlank() && apiKey.isNotBlank() && target.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Working…" else "Run analysis") }
                                 if (apiKey.isBlank()) Text("Set an API key in Settings to enable AI.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("AI RESULTS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background), shape = RoundedCornerShape(16.dp)) { Column(Modifier.padding(14.dp)) { Text(aiOutput, style = MaterialTheme.typography.bodyLarge, lineHeight = MaterialTheme.typography.bodyLarge.lineHeight) } }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { TextButton(onClick = { try { val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager; cm.setPrimaryClip(android.content.ClipData.newPlainText("CyberAgent AI analysis", aiOutput)) } catch (_: Exception) {} }) { Text("Copy AI") }; TextButton(onClick = { aiOutput = "AI findings will appear in this dedicated panel." }) { Text("Clear AI") } }
                             }
                         }
                     }
@@ -118,7 +122,7 @@ fun CyberAgentApp() {
                             TextButton(onClick = { try { val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager; cm.setPrimaryClip(android.content.ClipData.newPlainText("CyberAgent log", log)); append("Log copied to clipboard.") } catch (_: Exception) { append("Clipboard copy failed.") } }) { Icon(Icons.Default.Info, null); Text("Copy") }
                             TextButton(enabled = !busy, onClick = { log = "Log cleared." }) { Text("Clear") }
                             TextButton(onClick = {
-                                val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, "CyberAgent evidence"); putExtra(Intent.EXTRA_TEXT, "CyberAgent evidence log\nTarget: $target\n\n$log") }
+                                val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, "CyberAgent evidence"); putExtra(Intent.EXTRA_TEXT, "CyberAgent evidence log\nTarget: $target\n\n$log\n\nAI ANALYSIS\n$aiOutput") }
                                 context.startActivity(Intent.createChooser(send, "Export evidence"))
                             }) { Text("Export") }
                         }
