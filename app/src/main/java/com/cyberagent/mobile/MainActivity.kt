@@ -40,7 +40,8 @@ fun CyberAgentApp() {
     var endpoint by remember { mutableStateOf(prefs.getString("endpoint", "https://openrouter.ai/api/v1") ?: "") }
     var model by remember { mutableStateOf(prefs.getString("model", "deepseek/deepseek-chat") ?: "") }
     var settingsOpen by remember { mutableStateOf(false) }
-    var customInstructions by remember { mutableStateOf(prefs.getString("custom_instructions", "") ?: "") }\n    var directness by remember { mutableIntStateOf(prefs.getInt("directness", 75).coerceIn(0, 100)) }
+    var customInstructions by remember { mutableStateOf(prefs.getString("custom_instructions", "") ?: "") }
+    var directness by remember { mutableIntStateOf(prefs.getInt("directness", 75).coerceIn(0, 100)) }
     var providerTestResult by remember { mutableStateOf("") }
     var target by remember { mutableStateOf("") }
     var prompt by remember { mutableStateOf("") }
