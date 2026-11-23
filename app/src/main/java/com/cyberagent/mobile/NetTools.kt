@@ -97,6 +97,7 @@ object NetTools {
     }
     return@withContext "URL: $url\nStatus: $status\n$tls\nRedirect chain: ${visited.joinToString(" → ")}\nHeaders:\n$headers\n$checks"
    }
+   return@withContext "Redirect chain ended:\n${visited.joinToString(" → ")}"
   } catch(e:Exception) { "Web inspection failed: ${e.message}" }
  }
   suspend fun wifi(context: Context):String = withContext(Dispatchers.IO) {
