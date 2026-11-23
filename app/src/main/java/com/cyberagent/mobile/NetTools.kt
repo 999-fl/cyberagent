@@ -17,6 +17,7 @@ import java.net.HttpURLConnection
 import java.net.Socket
 import java.net.URL
 import java.io.File
+import java.net.URLEncoder
 import java.security.cert.X509Certificate
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -62,6 +63,116 @@ object NetTools {
   val out=StringBuilder("TCP connect scan of $host (${portList.size} ports):\n")
   if(results.isEmpty()) out.append("No tested ports reachable.") else results.forEach { out.append(it).append('\n') }
   out.toString()
+ }
+ suspend fun activePhpValidation(raw:String):String=withContext(Dispatchers.IO) {
+  val base=if(raw.startsWith("http://")||raw.startsWith("https://")) raw.trimEnd('/') else "https://$raw"
+  val urlBase=try { URL(base).let { URL(it.protocol,it.host,it.port.takeIf { p -> p!=-1 } ?: -1,"/").toString().trimEnd('/') } } catch(_:Exception){ base }
+  val out=StringBuilder("Active PHP/application validation for $urlBase\n")
+  val checks=listOf(
+   "/wp-json/" to "WordPress REST API",
+   "/wp-json/wp/v2/users" to "WordPress REST user enumeration",
+   "/wp-content/debug.log" to "WordPress debug log",
+   "/wp-content/uploads/" to "Upload directory listing",
+   "/phpinfo.php" to "PHP diagnostic endpoint",
+   "/server-status" to "Server status endpoint",
+   "/.env" to "Environment file",
+   "/.git/config" to "Git configuration",
+   "/wp-config.php.bak" to "WordPress backup",
+   "/backup.zip" to "Backup archive"
+  )
+  var confirmed=0
+  for((path,label) in checks) {
+   try {
+    val c=URL(urlBase+path).openConnection() as HttpURLConnection
+    c.connectTimeout=3500;c.readTimeout=3500;c.instanceFollowRedirects=false;c.requestMethod="GET"
+    c.setRequestProperty("User-Agent","CyberAgent-Active/0.1")
+    val status=c.responseCode
+    val body=try {
+     val stream=if(status>=400)c.errorStream else c.inputStream
+     stream?.bufferedReader()?.use { it.readText().take(48000) } ?: ""
+    } catch(_:Exception){""}
+    val lower=body.lowercase()
+    val marker=when(path) {
+     "/wp-json/" -> lower.contains("\"namespaces\"")||lower.contains("\"routes\"")
+     "/wp-json/wp/v2/users" -> lower.startsWith("[")&&lower.contains("\"slug\"")&&lower.contains("\"name\"")
+     "/wp-content/debug.log" -> status==200&&lower.contains("php ")&&lower.contains("stack")
+     "/wp-content/uploads/" -> lower.contains("index of")||lower.contains("parent directory")
+     "/phpinfo.php" -> lower.contains("php version")||lower.contains("phpinfo")
+     "/server-status" -> lower.contains("apache server status")||lower.contains("server uptime")
+     "/.env" -> lower.contains("app_")||lower.contains("db_")||lower.contains("password")||lower.contains("secret")
+     "/.git/config" -> lower.contains("[core]")||lower.contains("repositoryformat")
+     "/wp-config.php.bak","/backup.zip" -> status==200&&body.length>32
+     else -> false
+    }
+    val verdict=if(marker) "CONFIRMED $label"
+     else if(status in 200..299) "ACCESSIBLE; SENSITIVE CONTENT NOT CONFIRMED"
+     else if(status==401||status==403) "AUTHORIZATION REQUIRED"
+     else if(status in 300..399) "REDIRECT"
+     else if(status==404) "NOT FOUND"
+     else "HTTP $status"
+    if(marker) confirmed++
+    out.append("$path | HTTP $status | $verdict\n")
+    if(marker) out.append("  Evidence: response markers matched $label\n")
+    c.disconnect()
+   } catch(e:Exception) {
+    out.append("$path | INCONCLUSIVE | ${e.javaClass.simpleName}: ${e.message}\n")
+   }
+  }
+  out.append("Confirmed active findings: $confirmed\n")
+  out.append("This module uses only GET requests and does not send exploit payloads.\n")
+  out.toString()
+ }
+ suspend fun testSuppliedCredentials(raw:String,username:String,password:String,basicAuth:Boolean):String=withContext(Dispatchers.IO) {
+  if(username.isBlank()||password.isBlank()) return@withContext "Credential validation not run: username and password are both required."
+  val base=if(raw.startsWith("http://")||raw.startsWith("https://")) raw.trimEnd('/') else "https://$raw"
+  val urlBase=try { URL(base).let { URL(it.protocol,it.host,it.port.takeIf { p -> p!=-1 } ?: -1,"/").toString().trimEnd('/') } } catch(_:Exception){ base }
+  if(basicAuth) {
+   try {
+    val c=URL(urlBase).openConnection() as HttpURLConnection
+    c.connectTimeout=5000;c.readTimeout=5000;c.instanceFollowRedirects=false;c.requestMethod="GET"
+    c.setRequestProperty("Authorization","Basic "+android.util.Base64.encodeToString("$username:$password".toByteArray(Charsets.UTF_8),android.util.Base64.NO_WRAP))
+    c.setRequestProperty("User-Agent","CyberAgent-CredentialCheck/0.1")
+    val status=c.responseCode
+    val verdict=if(status in 200..299) "CONFIRMED SUPPLIED CREDENTIALS ACCEPTED"
+     else if(status==401||status==403) "SUPPLIED CREDENTIALS REJECTED"
+     else "INCONCLUSIVE HTTP $status"
+    c.disconnect()
+    return@withContext "HTTP Basic credential validation\n$verdict\nExact evidence: single GET returned HTTP $status.\nNo brute force or password guessing was performed."
+   } catch(e:Exception) {
+    return@withContext "HTTP Basic credential validation\nINCONCLUSIVE\nEvidence: ${e.javaClass.simpleName}: ${e.message}\nNo brute force or password guessing was performed."
+   }
+  }
+  try {
+   val loginUrl="$urlBase/wp-login.php"
+   val c=URL(loginUrl).openConnection() as HttpURLConnection
+   c.connectTimeout=5000;c.readTimeout=5000;c.instanceFollowRedirects=false;c.requestMethod="POST"
+   c.doOutput=true;c.setRequestProperty("Content-Type","application/x-www-form-urlencoded")
+   c.setRequestProperty("User-Agent","CyberAgent-CredentialCheck/0.1")
+   val form=listOf(
+    "log" to username,
+    "pwd" to password,
+    "wp-submit" to "Log In",
+    "redirect_to" to "$urlBase/wp-admin/",
+    "testcookie" to "1"
+   ).joinToString("&") { (key,value) -> "${URLEncoder.encode(key,"UTF-8")}=${URLEncoder.encode(value,"UTF-8")}" }
+   c.outputStream.use { it.write(form.toByteArray(Charsets.UTF_8)) }
+   val status=c.responseCode
+   val location=c.getHeaderField("Location").orEmpty()
+   val cookies=c.headerFields.entries.filter { it.key?.equals("Set-Cookie",true)==true }.flatMap { it.value }.joinToString(";").lowercase()
+   val body=try {
+    val stream=if(status>=400)c.errorStream else c.inputStream
+    stream?.bufferedReader()?.use { it.readText().take(12000) } ?: ""
+   } catch(_:Exception){""}
+   val success=cookies.contains("wordpress_logged_in") || location.contains("/wp-admin")
+   val rejected=body.lowercase().contains("incorrect password")||body.lowercase().contains("invalid username")||body.lowercase().contains("unknown username")
+   val verdict=if(success) "CONFIRMED SUPPLIED CREDENTIALS ACCEPTED"
+    else if(rejected) "SUPPLIED CREDENTIALS REJECTED"
+    else "INCONCLUSIVE"
+   c.disconnect()
+   "WordPress credential validation\n$verdict\nExact evidence: one POST returned HTTP $status.\nLocation: ${location.ifBlank { "(none)" }}\nLogin cookie observed: ${cookies.contains("wordpress_logged_in")}\nNo brute force or password guessing was performed."
+  } catch(e:Exception) {
+   "WordPress credential validation\nINCONCLUSIVE\nEvidence: ${e.javaClass.simpleName}: ${e.message}\nNo brute force or password guessing was performed."
+  }
  }
  suspend fun validateTcp(host:String,port:Int):String = withContext(Dispatchers.IO) {
   val h=cleanHost(host)

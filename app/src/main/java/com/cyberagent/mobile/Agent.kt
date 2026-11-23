@@ -21,6 +21,7 @@ object Agent {
   put(tool("web_inspect","Fetch a web page's status, headers, redirect and TLS details", "url"))
   put(tool("endpoint_discovery","Probe common web metadata, API and management paths for a target", "url"))
   put(tool("validate_http","Validate common HTTP exposures and return confirmed versus inconclusive evidence", "url"))
+  put(tool("active_php_validation","Run explicit active PHP and WordPress exposure checks that use non-destructive GET requests", "url"))
   put(tool("tls_inspect","Inspect a target's TLS handshake, peer certificate, validity and SANs on port 443", "hostname"))
  }
  private fun tool(name:String,desc:String,arg:String)=JSONObject().put("type","function").put("function",JSONObject().put("name",name).put("description",desc).put("parameters",JSONObject().put("type","object").put("properties",JSONObject().put(arg,JSONObject().put("type","string"))).put("required",JSONArray().put(arg)).put("additionalProperties",false)))
@@ -44,6 +45,7 @@ object Agent {
       "web_inspect" -> NetTools.http(schemeUrl(target,requested),host(requested))
       "endpoint_discovery" -> NetTools.endpointDiscovery(requested)
       "validate_http" -> NetTools.validateHttp(requested)
+      "active_php_validation" -> NetTools.activePhpValidation(requested)
       "tls_inspect" -> NetTools.tls(requested)
       else -> "Tool not registered."
      }

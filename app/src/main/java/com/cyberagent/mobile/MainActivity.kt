@@ -47,6 +47,10 @@ fun CyberAgentApp() {
     var target by remember { mutableStateOf("") }
     var prompt by remember { mutableStateOf("") }
     var validationPort by remember { mutableStateOf("443") }
+    var activeAuthorized by remember { mutableStateOf(false) }
+    var credentialUsername by remember { mutableStateOf("") }
+    var credentialPassword by remember { mutableStateOf("") }
+    var basicAuthMode by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf("Target evidence will appear here. Configure your provider in Settings to enable AI analysis.") }
     var aiOutput by remember { mutableStateOf("AI findings will appear in this dedicated panel.") }
     var busy by remember { mutableStateOf(false) }
@@ -189,6 +193,41 @@ fun CyberAgentApp() {
                                         scope.launch { try { append(NetTools.validateTcp(target,port)) } catch(e:Exception){ append("TCP validation failed: ${e.message}") } finally { busy=false } }
                                     }
                                 }, enabled=!busy&&target.isNotBlank(), modifier=Modifier.fillMaxWidth()) { Text("Validate service") }
+                            }
+                        }
+                    }
+                    item {
+                        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("ACTIVE VALIDATION", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Text("Opt-in checks for PHP/WordPress exposure and one-attempt validation with a supplied test account.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                    Checkbox(checked=activeAuthorized,onCheckedChange={activeAuthorized=it})
+                                    Text("I am authorized to test this target")
+                                }
+                                Row(horizontalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.fillMaxWidth()) {
+                                    FilterChip(selected=!basicAuthMode,onClick={basicAuthMode=false},label={Text("WordPress")},modifier=Modifier.weight(1f))
+                                    FilterChip(selected=basicAuthMode,onClick={basicAuthMode=true},label={Text("HTTP Basic")},modifier=Modifier.weight(1f))
+                                }
+                                OutlinedTextField(credentialUsername,{credentialUsername=it},label={Text("Test username")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                                OutlinedTextField(credentialPassword,{credentialPassword=it},label={Text("Test password")},visualTransformation=PasswordVisualTransformation(),singleLine=true,modifier=Modifier.fillMaxWidth())
+                                Row(horizontalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.fillMaxWidth()) {
+                                    Button(onClick={
+                                        if(!activeAuthorized) append("Active PHP validation blocked: authorization confirmation is required.")
+                                        else {
+                                            busy=true
+                                            scope.launch { try { append(NetTools.activePhpValidation(target)) } catch(e:Exception){ append("Active PHP validation failed: ${e.message}") } finally { busy=false } }
+                                        }
+                                    },enabled=!busy&&target.isNotBlank(),modifier=Modifier.weight(1f)) { Text("Test PHP") }
+                                    Button(onClick={
+                                        if(!activeAuthorized) append("Credential validation blocked: authorization confirmation is required.")
+                                        else if(credentialUsername.isBlank()||credentialPassword.isBlank()) append("Credential validation blocked: supply both test credentials.")
+                                        else {
+                                            busy=true
+                                            scope.launch { try { append(NetTools.testSuppliedCredentials(target,credentialUsername,credentialPassword,basicAuthMode)) } catch(e:Exception){ append("Credential validation failed: ${e.message}") } finally { busy=false } }
+                                        }
+                                    },enabled=!busy&&target.isNotBlank(),modifier=Modifier.weight(1f)) { Text("Test creds") }
+                                }
                             }
                         }
                     }
