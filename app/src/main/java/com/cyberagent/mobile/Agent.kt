@@ -38,7 +38,17 @@ object Agent {
     val calls=msg.optJSONArray("tool_calls")
     if(calls==null || calls.length()==0) return@withContext output
     for(i in 0 until calls.length()) {
-     val call=calls.getJSONObject(i); val fn=call.getJSONObject("function"); val name=fn.getString("name"); val args=JSONObject(fn.getString("arguments")); val requested=args.optString(if(name=="web_inspect")"url" else "hostname",target)
+     val call=calls.getJSONObject(i); val fn=call.getJSONObject("function"); val name=fn.getString("name"); val args=JSONObject(fn.getString("arguments")); val argName = when(name) {
+      "web_inspect", "endpoint_discovery", "validate_http", "active_php_validation" -> "url"
+      else -> "hostname"
+     }
+     val requested=args.optString(argName,target)
+     val requestedHost=host(requested)
+     val scopeHost=host(target)
+     if(scopeHost.isNotBlank() && requestedHost.isNotBlank() && requestedHost != scopeHost) {
+      messages.put(JSONObject().put("role","tool").put("tool_call_id",call.optString("id")).put("content","Blocked: requested target is outside the user-selected host scope ($scopeHost)."))
+      continue
+     }
      val result=when(name) {
       "dns_lookup" -> NetTools.dns(requested)
       "tcp_scan" -> NetTools.scan(requested)
