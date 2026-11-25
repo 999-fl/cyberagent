@@ -33,16 +33,19 @@ object Agent {
     val payload=JSONObject().put("model",model).put("messages",messages).put("tools",toolsJson()).put("tool_choice","auto")
     val request=Request.Builder().url(normalizeEndpoint(base)).addHeader("Authorization","Bearer $key").addHeader("Content-Type","application/json").post(payload.toString().toRequestBody("application/json".toMediaType())).build()
     val response=client.newCall(request).execute().use { r -> if(!r.isSuccessful) return@withContext "API error ${r.code}: ${r.body?.string()?.take(1200)}" else JSONObject(r.body!!.string()) }
-    val msg=response.getJSONArray("choices").getJSONObject(0).getJSONObject("message"); messages.put(msg)
+    val choices=response.optJSONArray("choices")
+    val msg=choices?.optJSONObject(0)?.optJSONObject("message")
+      ?: return@withContext "Provider response did not contain choices[0].message. Check the provider model, endpoint and response format."
+    messages.put(msg)
     output=msg.optString("content","")
     val calls=msg.optJSONArray("tool_calls")
     if(calls==null || calls.length()==0) return@withContext output
     for(i in 0 until calls.length()) {
-     val call=calls.getJSONObject(i); val fn=call.getJSONObject("function"); val name=fn.getString("name"); val args=JSONObject(fn.getString("arguments")); val argName = when(name) {
+     val call=calls.getJSONObject(i); val fn=call.optJSONObject("function") ?: continue; val name=fn.optString("name"); val args=try { JSONObject(fn.optString("arguments","{}")) } catch (_:Exception) { JSONObject() }; val argName = when(name) {
       "web_inspect", "endpoint_discovery", "validate_http", "active_php_validation" -> "url"
       else -> "hostname"
      }
-     val requested=args.optString(argName,target)
+     val requested=args.optString(argName,target).trim().ifBlank { target }
      val requestedHost=host(requested)
      val scopeHost=host(target)
      if(scopeHost.isNotBlank() && requestedHost.isNotBlank() && requestedHost != scopeHost) {
