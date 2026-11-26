@@ -39,9 +39,13 @@ object Agent {
     messages.put(msg)
     output=msg.optString("content","")
     val calls=msg.optJSONArray("tool_calls")
-    if(calls==null || calls.length()==0) return@withContext output
-    for(i in 0 until calls.length()) {
-     val call=calls.getJSONObject(i); val fn=call.optJSONObject("function") ?: continue; val name=fn.optString("name"); val args=try { JSONObject(fn.optString("arguments","{}")) } catch (_:Exception) { JSONObject() }; val argName = when(name) {
+    val legacy=msg.optJSONObject("function_call")
+    if((calls==null || calls.length()==0) && legacy==null) return@withContext output
+    val normalizedCalls=JSONArray()
+    if(calls!=null) for(i in 0 until calls.length()) normalizedCalls.put(calls.getJSONObject(i))
+    if(legacy!=null) normalizedCalls.put(JSONObject().put("id","legacy-call-$round").put("function",legacy))
+    for(i in 0 until normalizedCalls.length()) {
+     val call=normalizedCalls.getJSONObject(i); val fn=call.optJSONObject("function") ?: continue; val name=fn.optString("name"); val args=try { JSONObject(fn.optString("arguments","{}")) } catch (_:Exception) { JSONObject() }; val argName = when(name) {
       "web_inspect", "endpoint_discovery", "validate_http", "active_php_validation" -> "url"
       else -> "hostname"
      }
@@ -62,7 +66,12 @@ object Agent {
       "tls_inspect" -> NetTools.tls(requested)
       else -> "Tool not registered."
      }
-     messages.put(JSONObject().put("role","tool").put("tool_call_id",call.optString("id")).put("content",result))
+     val callId=call.optString("id")
+     if(callId.startsWith("legacy-call-")) {
+      messages.put(JSONObject().put("role","function").put("name",name).put("content",result))
+     } else {
+      messages.put(JSONObject().put("role","tool").put("tool_call_id",callId).put("content",result))
+     }
     }
    }
    "Agent stopped after $MAX_ROUNDS tool rounds. Partial response:\n$output"
