@@ -27,6 +27,7 @@ object Agent {
  private fun tool(name:String,desc:String,arg:String)=JSONObject().put("type","function").put("function",JSONObject().put("name",name).put("description",desc).put("parameters",JSONObject().put("type","object").put("properties",JSONObject().put(arg,JSONObject().put("type","string"))).put("required",JSONArray().put(arg)).put("additionalProperties",false)))
  suspend fun run(base:String,model:String,key:String,target:String,question:String,history:String,customInstructions:String="",directness:Int=75):String=withContext(Dispatchers.IO) {
   try {
+    val scopeHost=host(target)
     val messages=JSONArray().put(JSONObject().put("role","system").put("content","You are CyberAgent, an evidence-based mobile pentest assistant. Answer directly and can answer without a target. Never invent a finding or claim a check was performed unless it appears in the evidence. Clearly distinguish discovery from validation: an open port, HTTP 200, missing header, or discovered path is not automatically a vulnerability. Only call a finding confirmed when validation evidence contains matching content or an actual service response proving the issue. For each finding report: type, verdict, confidence, exact evidence, observed status/banner/content marker, potential impact, remediation, and recommended safe follow-up. Structure reports as: 1) Executive summary, 2) Confirmed findings, 3) Discovered but unconfirmed items, 4) Inconclusive checks, 5) Recommended follow-up. Directness preference: $directness/100. Custom user instructions:\n$customInstructions\nActivity context:\n$history")).put(JSONObject().put("role","user").put("content",question))
    var output=""
    repeat(MAX_ROUNDS) { round ->
@@ -51,7 +52,6 @@ object Agent {
      }
      val requested=args.optString(argName,target).trim().ifBlank { target }
      val requestedHost=host(requested)
-     val scopeHost=host(target)
      if(scopeHost.isNotBlank() && requestedHost.isNotBlank() && requestedHost != scopeHost) {
       messages.put(JSONObject().put("role","tool").put("tool_call_id",call.optString("id")).put("content","Blocked: requested target is outside the user-selected host scope ($scopeHost)."))
       continue
